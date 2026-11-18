@@ -152,6 +152,11 @@ activemq-data/
 # Environments
 .env
 .envrc
+*firebase-adminsdk*.json
+web/.env.local
+web/node_modules/
+web/.next/
+web/tsconfig.tsbuildinfo
 .venv
 env/
 venv/
