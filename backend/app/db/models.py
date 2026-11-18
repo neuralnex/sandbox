@@ -13,6 +13,7 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     firebase_uid: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
     username: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
     email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)

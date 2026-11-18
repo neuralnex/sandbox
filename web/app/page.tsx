@@ -89,6 +89,7 @@ function AuthScreen({ onReady }: { onReady: (token: string) => Promise<void> }) 
         if (!response.ok) throw new Error(body?.detail || "Sign in failed. Check your details and try again.");
         const session: ApiSession = { ...body, expires_at: Date.now() + Number(body.expires_in) * 1000 };
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        await api<User>("/auth/sync", session.id_token, jsonBody(username ? { username } : {}));
         await onReady(session.id_token);
       }
     } catch (cause) { setError(explainError(cause)); }
@@ -283,10 +284,15 @@ export default function Home() {
       if (firebaseUser) {
         try {
           const accessToken = await getIdToken(firebaseUser);
+          await api<User>("/auth/sync", accessToken, jsonBody({}));
           if (!cancelled) { setToken(accessToken); await loadWorkspace(accessToken); }
-        } catch (cause) { if (!cancelled) { setError(explainError(cause)); setLoading(false); } }
+        } catch { if (!cancelled) setLoading(false); }
       } else if (session) {
-        try { const accessToken = await getToken(); if (!cancelled) { setToken(accessToken); await loadWorkspace(accessToken); } }
+        try {
+          const accessToken = await getToken();
+          await api<User>("/auth/sync", accessToken, jsonBody({}));
+          if (!cancelled) { setToken(accessToken); await loadWorkspace(accessToken); }
+        }
         catch { if (!cancelled) setLoading(false); }
       } else { setUser(null); setLoading(false); }
     }
