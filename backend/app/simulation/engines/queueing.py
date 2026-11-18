@@ -5,7 +5,7 @@ from typing import Any
 import simpy
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from backend.app.simulation.contracts import SimulationCancelled
+from backend.app.simulation.contracts import SimulationCancelled, SimulationEngine
 
 
 class QueueingConfig(BaseModel):
