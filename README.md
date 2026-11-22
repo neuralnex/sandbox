@@ -2,7 +2,7 @@
 
 Sandbox is an experimentation workspace for turning questions into explicit model configurations, running reproducible scenarios, comparing outputs, and exporting reports. It keeps the AI draft separate from the simulation engine: the model executes the run and records the configuration, seed, engine version, and result.
 
-The current executable model is a discrete event queueing simulation using SimPy. It models exponential arrivals and service times with identical parallel servers. Other domains and simulation engines can be added behind the engine registry as the product's initial use case expands.
+The executable model catalog currently includes: (1) a discrete event queueing simulation using SimPy, with exponential arrivals and service times across identical parallel servers; (2) an inventory replenishment model with daily demand, reorder thresholds, fixed lead times, stockouts, and basic cost outputs; and (3) a seeded Monte Carlo business outcome model using triangular low/most-likely/high estimates for demand, price, and variable cost. Each model validates bounded inputs and records reproducible outputs. Industry templates help set the question and model type; users still enter and review the model assumptions.
 
 ## Included workflow
 
@@ -11,7 +11,7 @@ The current executable model is a discrete event queueing simulation using SimPy
 - OpenRouter-assisted experiment drafts and grounded run commentary, both schema validated and clearly labeled as AI output.
 - Scenario branching, background execution through Celery and Redis, run history, cancellation, and run comparison.
 - PDF, CSV, and JSON reports.
-- Responsive Next.js workspace UI with light and dark appearance.
+- Responsive Next.js workspace UI with light and dark appearance, industry starter prompts, workspace business profiles, and optional location context.
 
 ## Configure Firebase
 
@@ -29,17 +29,17 @@ Keep service-account credentials and provider keys out of source control. Fireba
 After configuring `.env`, start the full stack:
 
 ```sh
-docker compose up --build
+COMPOSE_BAKE=false docker compose up --build
 ```
 
-Open the app at `http://localhost:3000` and API documentation at `http://localhost:8000/docs`. The API container applies Alembic migrations on startup. The local PostgreSQL credentials in `docker-compose.yml` are for development only.
+`COMPOSE_BAKE=false` selects Compose's built-in builder. It avoids a Bake panic in affected Docker Compose installations. The API and worker build steps use host networking so dependency installation can use the host's DNS configuration. Open the app at `http://localhost:3000` and API documentation at `http://localhost:8000/docs`. The API container applies Alembic migrations on startup. The local PostgreSQL credentials in `docker-compose.yml` are for development only.
 
 ## Run the web app locally
 
 Configure the backend `.env` as above, then copy `web/.env.example` to `web/.env.local` and add the Firebase web app settings. Start PostgreSQL, Redis, API, and worker with Docker:
 
 ```sh
-docker compose up --build db redis api worker
+COMPOSE_BAKE=false docker compose up --build db redis api worker
 ```
 
 In another terminal:
@@ -58,7 +58,7 @@ The web client signs in through Firebase and sends Firebase ID tokens as bearer 
 
 The API base path is `/api/v1`. The main resource routes are:
 
-- `/organizations`, `/projects`, `/experiments` — workspace and experiment setup.
+- `/organizations`, `/projects`, `/experiments` — workspace and experiment setup. Workspace profiles include business type and optional city, region, country, time zone and coordinates.
 - `/environments` — environment and source-provenance records.
 - `/ai/interpret` — optional OpenRouter experiment draft.
 - `/ai/runs/{id}/interpret` — optional commentary grounded in a completed run's metrics and assumptions.
@@ -68,4 +68,4 @@ The API base path is `/api/v1`. The main resource routes are:
 
 ## Product boundaries
 
-An environment's dataset entries currently record source metadata; they do not import or validate external data. The first queueing engine has bounded inputs and simple stochastic assumptions. It does not represent a complete business, urban, agricultural, or other domain model. Treat results as outputs of the configured model, not factual forecasts.
+Environment locations are user-entered or captured only after an explicit browser location request. Firebase Authentication does not supply a business address or GPS position. Environment dataset entries currently record source metadata; they do not import or validate external data. The workspace provides conceptual 2D flow diagrams, run charts, and generated summaries for the available models. These visuals do not represent calibrated geography or a digital twin. Industry starter prompts help frame a question but do not provide business facts. The current models have bounded, simplified assumptions and do not include live demand feeds, schedules, perishability, supplier constraints, or correlated uncertainty. Treat results as outputs of the configured model, not factual forecasts.

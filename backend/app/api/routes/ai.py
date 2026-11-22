@@ -12,7 +12,7 @@ from backend.app.api.deps import CurrentUser, DbSession
 from backend.app.api.routes.simulations import _accessible_run
 from backend.app.api.schemas import ExperimentInterpretation, IdeaInterpretInput, QueueingDraftConfig, RunInterpretation
 from backend.app.db.models import Experiment, Scenario
-from backend.app.simulation.engines.queueing import ENGINE_REGISTRY
+from backend.app.simulation.engines import ENGINE_REGISTRY
 
 router = APIRouter(prefix="/ai", tags=["AI assistance"])
 
@@ -27,8 +27,8 @@ async def interpret_idea(payload: IdeaInterpretInput, _: CurrentUser) -> Experim
                 "You help users prepare experiments for a real simulation engine. "
                 "Return a draft only. Never claim that a simulation was run or predict factual outcomes. "
                 "Separate user-provided facts from assumptions. Use null for unknown variable values and "
-                "list missing information as questions. The only currently supported simulation engine "
-                "is queueing. Its configuration requires arrival_rate_per_hour, "
+                "list missing information as questions. This AI draft flow currently supports queueing only. "
+                "Its configuration requires arrival_rate_per_hour, "
                 "service_rate_per_hour_per_server, servers, and duration_hours. Do not invent values as "
                 "facts. If a required value is absent, mark configuration_valid false and explain it."
             ),

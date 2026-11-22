@@ -14,7 +14,7 @@ from backend.app.api.schemas import (
 )
 from backend.app.db.base import utc_now
 from backend.app.db.models import Experiment, OrganizationMembership, Project, Scenario, SimulationEvent, SimulationRun
-from backend.app.simulation.engines.queueing import ENGINE_REGISTRY
+from backend.app.simulation.engines import ENGINE_REGISTRY
 from backend.app.workers.simulation_tasks import run_simulation
 
 router = APIRouter(tags=["simulation runs"])

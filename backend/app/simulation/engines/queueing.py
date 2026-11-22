@@ -5,7 +5,7 @@ from typing import Any
 import simpy
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from backend.app.simulation.contracts import SimulationCancelled, SimulationEngine
+from backend.app.simulation.contracts import SimulationCancelled
 
 
 class QueueingConfig(BaseModel):
@@ -47,6 +47,9 @@ class QueueingEngine:
         completed = 0
         total_busy_hours = 0.0
         waits: list[float] = []
+        period_count = max(1, int(values.duration_hours + 0.999999))
+        arrivals_by_period = [0] * period_count
+        completed_by_period = [0] * period_count
 
         def serve_customer(arrival_time: float):
             nonlocal completed, total_busy_hours
@@ -57,6 +60,8 @@ class QueueingEngine:
                 yield environment.timeout(service_time)
                 total_busy_hours += service_time
                 completed += 1
+                if environment.now < values.duration_hours:
+                    completed_by_period[min(period_count - 1, int(environment.now))] += 1
 
         def customer_arrivals():
             nonlocal arrivals
@@ -65,6 +70,7 @@ class QueueingEngine:
                 if environment.now >= values.duration_hours:
                     return
                 arrivals += 1
+                arrivals_by_period[min(period_count - 1, int(environment.now))] += 1
                 environment.process(serve_customer(environment.now))
 
         environment.process(customer_arrivals())
@@ -88,12 +94,13 @@ class QueueingEngine:
             "p95_wait_minutes": round(p95_wait * 60, 3),
             "server_utilization": round(total_busy_hours / capacity_hours, 5),
             "duration_hours": values.duration_hours,
+            "series": [
+                {"period": hour + 1, "arrivals": arrivals_by_period[hour], "completed": completed_by_period[hour]}
+                for hour in range(period_count)
+            ],
             "assumptions": [
                 "Arrivals follow a Poisson process with an exponential inter-arrival time.",
                 "Service times are exponentially distributed and servers are identical.",
                 "Customers arriving before the horizon are counted; work after the horizon is unfinished.",
             ],
         }
-
-
-ENGINE_REGISTRY: dict[str, SimulationEngine] = {"queueing": QueueingEngine()}

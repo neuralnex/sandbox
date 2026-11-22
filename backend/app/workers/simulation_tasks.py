@@ -6,7 +6,7 @@ from backend.app.db.base import utc_now
 from backend.app.db.models import SimulationEvent, SimulationRun
 from backend.app.db.session import SessionLocal
 from backend.app.simulation.contracts import SimulationCancelled
-from backend.app.simulation.engines.queueing import ENGINE_REGISTRY
+from backend.app.simulation.engines import ENGINE_REGISTRY
 from backend.app.workers.celery_app import celery_app
 
 
