@@ -40,7 +40,9 @@ After configuring `.env`, start the full stack:
 COMPOSE_BAKE=false docker compose up --build
 ```
 
-`COMPOSE_BAKE=false` selects Compose's built-in builder. It avoids a Bake panic in affected Docker Compose installations. The API and worker build steps use host networking so dependency installation can use the host's DNS configuration. At runtime, the API and worker also use host networking because this Linux development setup's Docker bridge cannot reliably reach the configured external Neon and Upstash services. The API listens on port 8000 directly on the host; the web app is at `http://localhost:3000` and API documentation at `http://localhost:8000/docs`. The API container applies Alembic migrations on startup. The local PostgreSQL and Redis services remain available for development, and their credentials are for local use only.
+`COMPOSE_BAKE=false` selects Compose's built-in builder. It avoids a Bake panic in affected Docker Compose installations. The API and worker build steps use host networking so dependency installation can use the host's DNS configuration. At runtime, the API and worker also use host networking because this Linux development setup's Docker bridge cannot reliably reach the configured external Neon and Upstash services. The API listens on port 8000 directly on the host; the web app is at `http://localhost:3000` and API documentation at `http://localhost:8000/docs`. The development API container applies Alembic migrations on startup. The local PostgreSQL and Redis services remain available for development, and their credentials are for local use only.
+
+For separate web and backend image builds, release migrations, and API/worker deployment configuration, see [deploy/README.md](deploy/README.md). The web image uses Next.js standalone output. The backend image can run as the API or as the Celery worker; production migrations are a separate one-off release command.
 
 ## Run the web app locally
 
