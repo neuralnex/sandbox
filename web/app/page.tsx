@@ -161,7 +161,7 @@ function AuthScreen({ onReady }: { onReady: (token: string) => Promise<void> }) 
             <Field id="workspace" label="Workspace name" autoComplete="organization" value={workspace} onChange={(event) => setWorkspace(event.target.value)} hint="Optional. You can change this later." />
           </> : <>
             <Field id="identifier" label="Username or email" required autoComplete="username" spellCheck={false} value={identifier} onChange={(event) => setIdentifier(event.target.value)} />
-            <Field id="username-social" label="Username for a new social sign-in" autoComplete="username" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} hint="Only needed the first time you use Google or GitHub." />
+            <Field id="username-social" label="Preferred username (optional)" autoComplete="username" spellCheck={false} value={username} onChange={(event) => setUsername(event.target.value)} hint="Leave blank to get a suggested username when you first use Google or GitHub." />
           </>}
           <div className="space-y-1.5">
             <label htmlFor="password" className="text-sm font-semibold">Password</label>
@@ -571,8 +571,8 @@ export default function Home() {
   const latestRun = runs[0];
   const selectedScenarioRun = runs.find((run) => run.scenario_id === activeScenario?.id && run.status === "completed");
   const metricLabels: Record<string, string> = {
-    customers_arrived: "Arrivals", customers_started_service: "Entered service", customers_served: "Completed service",
-    customers_unfinished_at_horizon: "Unfinished at horizon", mean_wait_minutes: "Average wait",
+    customers_arrived: "Arrivals", customers_entered_service: "Entered service", customers_served: "Completed by horizon",
+    customers_completed_after_horizon: "Completed after horizon", customers_unfinished_at_horizon: "Unfinished at horizon", mean_wait_minutes: "Average wait",
     p95_wait_minutes: "95th percentile wait", server_utilization: "Server utilization", duration_hours: "Run duration",
     total_demand: "Total demand", units_fulfilled: "Units fulfilled", units_stocked_out: "Units stocked out", fill_rate: "Fill rate",
     replenishment_orders: "Replenishment orders", ending_inventory: "Ending inventory", net_operating_result: "Net operating result",

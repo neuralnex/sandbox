@@ -1,8 +1,11 @@
 from typing import Any
+import hashlib
+import re
 
 import httpx
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from backend.app.api.deps import DbSession, FirebaseIdentity
 from backend.app.api.schemas import (
@@ -88,11 +91,32 @@ def _create_profile(
     user = User(firebase_uid=firebase_uid, username=username, email=email.lower() if email else None)
     workspace = Organization(name=workspace_name or f"{username}'s workspace")
     db.add_all([user, workspace])
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        # The Firebase state observer and the sign-in handler can sync the
+        # same identity concurrently. Treat the winning insert as success.
+        db.rollback()
+        existing = db.scalar(select(User).where(User.firebase_uid == firebase_uid))
+        if existing is not None:
+            return existing
+        raise HTTPException(
+            status_code=409,
+            detail="An account with this username or email already exists",
+        ) from exc
     db.add(OrganizationMembership(organization_id=workspace.id, user_id=user.id, role="owner"))
     db.commit()
     db.refresh(user)
     return user
+
+
+def _suggest_username(identity: dict[str, Any], firebase_uid: str) -> str:
+    """Create a stable, collision-resistant handle for first-time social sign-ins."""
+    email = identity.get("email") or ""
+    display_name = identity.get("name") or email.partition("@")[0] or "member"
+    stem = re.sub(r"[^a-z0-9_]+", "_", display_name.lower()).strip("_") or "member"
+    suffix = hashlib.sha256(firebase_uid.encode("utf-8")).hexdigest()[:8]
+    return f"{stem[:23]}_{suffix}"
 
 
 def _firebase_token_response(result: dict[str, Any]) -> FirebaseTokenRead:
@@ -205,29 +229,18 @@ def sync_profile(
                     status_code=403,
                     detail="Verify your email with Firebase before linking your existing account",
                 )
-            if payload.username is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail="Choose a username to finish linking your existing account",
-                )
-            username = payload.username.lower()
-            username_owner = db.scalar(
-                select(User.id).where(User.username == username, User.id != legacy_user.id)
-            )
-            if username_owner is not None:
-                raise HTTPException(status_code=409, detail="This username is already taken")
             legacy_user.firebase_uid = firebase_uid
-            legacy_user.username = username
+            # Keep the established Sandbox handle and data when linking a
+            # verified Firebase identity. A supplied handle is only relevant
+            # when creating a new profile.
             db.commit()
             db.refresh(legacy_user)
             return legacy_user
 
-    if payload.username is None:
-        raise HTTPException(status_code=422, detail="Choose a username to finish creating your profile")
     return _create_profile(
         db,
         firebase_uid=firebase_uid,
         email=email,
-        username=payload.username,
+        username=payload.username or _suggest_username(identity, firebase_uid),
         workspace_name=payload.workspace_name,
     )

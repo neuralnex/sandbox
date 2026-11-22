@@ -4,6 +4,14 @@ Sandbox is an experimentation workspace for turning questions into explicit mode
 
 The executable model catalog currently includes: (1) a discrete event queueing simulation using SimPy, with exponential arrivals and service times across identical parallel servers; (2) an inventory replenishment model with daily demand, reorder thresholds, fixed lead times, stockouts, and basic cost outputs; and (3) a seeded Monte Carlo business outcome model using triangular low/most-likely/high estimates for demand, price, and variable cost. Each model validates bounded inputs and records reproducible outputs. Industry templates help set the question and model type; users still enter and review the model assumptions.
 
+### Model setup
+
+- **Queueing:** arrivals per hour, service completions per server per hour, number of parallel servers, and duration in hours. The optional seed makes a run repeatable. Outputs include completions by the time horizon, unfinished work at that cutoff, average and 95th-percentile wait for all jobs that arrived before it, utilization, and an hourly series. Arrival and service times are exponential; servers are identical and continuously available. Jobs are drained after the cutoff to calculate full waiting times; post-cutoff completions remain marked unfinished at the cutoff.
+- **Inventory:** average daily demand, demand standard deviation, reorder point, order quantity, supplier lead time, starting stock, and duration in days. The form also asks for unit revenue, unit purchase cost, holding cost, and stockout cost. Outputs include fill rate, stockouts, orders, ending stock, and a basic net operating result. Demand is sampled from a normal distribution and clipped at zero; the model has no perishability or seasonality.
+- **Monte Carlo business range:** low, most-likely, and high estimates for demand, revenue per unit, and variable cost per unit, plus fixed cost per period. The form also asks for trials, periods, and starting cash. Outputs are a profit distribution, P10/median/P90, and the share of trials with positive profit. This share is conditional on the entered assumptions, not a calibrated real-world probability.
+
+Industry starter prompts cover service operations and inventory examples in retail, healthcare, logistics, manufacturing, finance, education, hospitality, public services, technology, agriculture, and general business. These are prompts, not separate model types. The AI configuration draft currently supports queueing; inventory and Monte Carlo are configured directly from their input forms.
+
 ## Included workflow
 
 - Firebase email/password, Google, and GitHub authentication.
@@ -54,7 +62,7 @@ Visit `http://localhost:3000`. The web app requires Node.js 20.9 or newer.
 
 ## Authentication and API
 
-The web client signs in through Firebase and sends Firebase ID tokens as bearer tokens. Email/password login accepts either a username or email. The API also exposes `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/refresh`, and `/api/v1/auth/sync`. `/auth/sync` creates a Sandbox profile for a federated sign-in and links legacy users only when Firebase confirms a verified email.
+The web client signs in through Firebase and sends Firebase ID tokens as bearer tokens. Email/password login accepts either a username or email. The API also exposes `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/refresh`, and `/api/v1/auth/sync`. `/auth/sync` creates a profile for a first-time federated sign-in (suggesting a stable handle if none is supplied) and links legacy users only when Firebase confirms a verified email, preserving their existing Sandbox handle and data.
 
 The API base path is `/api/v1`. The main resource routes are:
 
