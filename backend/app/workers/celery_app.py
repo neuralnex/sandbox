@@ -1,3 +1,5 @@
+import ssl
+
 from celery import Celery
 
 from backend.app.core.config import settings
@@ -16,4 +18,6 @@ celery_app.conf.update(
     task_time_limit=settings.simulation_max_runtime_seconds,
     task_ignore_result=True,
     broker_connection_retry_on_startup=True,
+    broker_use_ssl={"ssl_cert_reqs": ssl.CERT_REQUIRED},
+    redis_backend_use_ssl={"ssl_cert_reqs": ssl.CERT_REQUIRED},
 )

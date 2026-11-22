@@ -1,3 +1,4 @@
+import logging
 import secrets
 from uuid import UUID
 
@@ -17,6 +18,7 @@ from backend.app.simulation.engines.queueing import ENGINE_REGISTRY
 from backend.app.workers.simulation_tasks import run_simulation
 
 router = APIRouter(tags=["simulation runs"])
+logger = logging.getLogger(__name__)
 
 
 def _accessible_run(db: DbSession, user_id: UUID, run_id: UUID) -> SimulationRun:
@@ -135,6 +137,7 @@ def start_run(
         db.commit()
         db.refresh(run)
     except Exception as exc:
+        logger.exception("Could not enqueue simulation run %s", run.id)
         run.status = "failed"
         run.error = "Could not enqueue simulation worker"
         run.finished_at = utc_now()

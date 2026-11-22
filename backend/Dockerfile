@@ -7,6 +7,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY backend ./backend
 RUN pip install --no-cache-dir .
+COPY backend/gai.conf /etc/gai.conf
 COPY alembic.ini ./
 COPY migrations ./migrations
 
