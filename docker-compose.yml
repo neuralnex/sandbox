@@ -19,6 +19,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      network: host
     env_file:
       - .env
     ports:
@@ -43,6 +44,7 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      network: host
     env_file:
       - .env
     command: ["celery", "-A", "backend.app.workers.celery_app:celery_app", "worker", "--loglevel=INFO"]

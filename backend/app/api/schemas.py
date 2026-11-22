@@ -45,8 +45,27 @@ class ProfileSyncInput(BaseModel):
 class OrganizationRead(BaseModel):
     id: UUID
     name: str
+    business_type: str = "general"
+    country: str | None = None
+    region: str | None = None
+    city: str | None = None
+    timezone: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     role: str
     created_at: datetime
+
+
+class OrganizationUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    business_type: str | None = Field(default=None, min_length=1, max_length=80)
+    country: str | None = Field(default=None, max_length=100)
+    region: str | None = Field(default=None, max_length=100)
+    city: str | None = Field(default=None, max_length=100)
+    timezone: str | None = Field(default=None, max_length=80)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
 
 
 class ProjectCreate(BaseModel):

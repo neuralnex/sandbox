@@ -2,7 +2,7 @@
 
 import {
   Github, ArrowDownToLine, ArrowUpRight, Beaker, Check, ChevronDown,
-  CircleHelp, Clock3, Database, FlaskConical, LoaderCircle, LogOut, Moon,
+  CircleHelp, Clock3, Database, FlaskConical, LoaderCircle, LogOut, MapPin, Moon,
   Play, Plus, RefreshCw, Settings2, Sparkles, Sun, X,
 } from "lucide-react";
 import {
@@ -20,6 +20,19 @@ const statusCopy: Record<string, string> = {
   queued: "Queued", running: "Running", cancel_requested: "Stopping",
   completed: "Complete", failed: "Failed", cancelled: "Cancelled",
 };
+
+const starterPrompts = [
+  { label: "Retail & ecommerce", domain: "retail", title: "Retail service capacity", text: "Explore whether staffing capacity can keep up with customer arrivals across the operating day. Identify arrival patterns, service time, team capacity, peak periods, and the wait-time target." },
+  { label: "Healthcare", domain: "healthcare", title: "Patient access and waiting", text: "Explore patient arrivals and service capacity for a care setting. Specify the service stages, observed arrival rate, service time, available staff, operating hours, and wait-time target. Do not assume clinical outcomes." },
+  { label: "Logistics", domain: "logistics", title: "Fulfillment throughput", text: "Explore incoming orders or shipments against processing capacity. Specify arrival patterns, processing time, parallel workstations or teams, operating hours, and the backlog or turnaround target." },
+  { label: "Manufacturing", domain: "manufacturing", title: "Production line capacity", text: "Explore work-item arrivals and production capacity. Describe the process step, cycle time, parallel machines or operators, operating schedule, and throughput or queue target." },
+  { label: "Financial services", domain: "finance", title: "Service operations capacity", text: "Explore incoming service requests against team capacity. Specify request arrivals, handling time, parallel agents, operating hours, and the service-level target." },
+  { label: "Education", domain: "education", title: "Learner support capacity", text: "Explore learner requests or appointments against support capacity. Specify arrivals, handling time, parallel staff, operating hours, and the wait-time or completion target." },
+  { label: "Hospitality", domain: "hospitality", title: "Guest service flow", text: "Explore guest arrivals and service capacity. Specify arrival patterns, service time, parallel staff or stations, operating hours, and the wait-time target." },
+  { label: "Public services", domain: "government", title: "Public service access", text: "Explore incoming service cases against processing capacity. Specify arrivals, handling time, parallel staff, operating schedule, and the backlog or wait-time target." },
+  { label: "Technology & SaaS", domain: "technology", title: "Support queue capacity", text: "Explore incoming support tickets against team capacity. Specify arrival rate, resolution time, parallel agents, coverage hours, and the response-time or backlog target." },
+  { label: "Other business", domain: "general", title: "Operations capacity", text: "Describe the work arriving in your system and the team or resources that process it. Specify arrival rate, service time, parallel capacity, operating period, and the outcome you want to measure." },
+];
 
 function explainError(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Try again.";
@@ -175,6 +188,14 @@ export default function Home() {
   const [token, setToken] = useState("");
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
+  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [businessType, setBusinessType] = useState("general");
+  const [workspaceCountry, setWorkspaceCountry] = useState("");
+  const [workspaceRegion, setWorkspaceRegion] = useState("");
+  const [workspaceCity, setWorkspaceCity] = useState("");
+  const [workspaceTimezone, setWorkspaceTimezone] = useState("");
+  const [workspaceCoordinates, setWorkspaceCoordinates] = useState<{ latitude: number | null; longitude: number | null }>({ latitude: null, longitude: null });
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectForExperiment, setProjectForExperiment] = useState("");
   const [newProjectName, setNewProjectName] = useState("First project");
@@ -182,6 +203,9 @@ export default function Home() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [environmentType, setEnvironmentType] = useState<Environment["environment_type"]>("synthetic");
   const [environmentName, setEnvironmentName] = useState("");
+  const [environmentCountry, setEnvironmentCountry] = useState("");
+  const [environmentCity, setEnvironmentCity] = useState("");
+  const [environmentCoordinates, setEnvironmentCoordinates] = useState<{ latitude: number | null; longitude: number | null }>({ latitude: null, longitude: null });
   const [datasetName, setDatasetName] = useState("");
   const [datasetSource, setDatasetSource] = useState("");
   const [activeEnvironmentId, setActiveEnvironmentId] = useState("");
@@ -211,6 +235,7 @@ export default function Home() {
   const [duration, setDuration] = useState("");
   const [runSeed, setRunSeed] = useState("");
   const [domain, setDomain] = useState("general");
+  const [selectedStarter, setSelectedStarter] = useState("");
   const [aiDraft, setAiDraft] = useState<Interpretation | null>(null);
   const [branchName, setBranchName] = useState("Higher arrivals");
   const [branchArrival, setBranchArrival] = useState("24");
@@ -268,7 +293,15 @@ export default function Home() {
         api<User>("/users/me", accessToken), api<Organization[]>("/organizations", accessToken),
         api<Project[]>("/projects", accessToken), api<Experiment[]>("/experiments", accessToken),
       ]);
-      setUser(me); setOrg(organizations[0] || null); setProjects(projectRows); setExperiments(experimentRows);
+      const activeOrg = organizations[0] || null;
+      setUser(me); setOrg(activeOrg); setProjects(projectRows); setExperiments(experimentRows);
+      if (activeOrg) {
+        setWorkspaceName(activeOrg.name);
+        setBusinessType(activeOrg.business_type || "general");
+        setWorkspaceCountry(activeOrg.country || ""); setWorkspaceRegion(activeOrg.region || "");
+        setWorkspaceCity(activeOrg.city || ""); setWorkspaceTimezone(activeOrg.timezone || "");
+        setWorkspaceCoordinates({ latitude: activeOrg.latitude, longitude: activeOrg.longitude });
+      }
       setProjectForExperiment((previous) => projectRows.some((item) => item.id === previous) ? previous : projectRows[0]?.id || "__new");
       const environmentRows = organizations[0] ? await api<Environment[]>(`/environments?organization_id=${organizations[0].id}`, accessToken) : [];
       setEnvironments(environmentRows);
@@ -341,10 +374,17 @@ export default function Home() {
       }
       const experiment = await api<Experiment>("/experiments", getToken, jsonBody({
         project_id: project.id, environment_id: environmentForExperiment || null, title: title.trim(), description: idea.trim(), objective: idea.trim(), domain,
-        specification: { simulation: { engine: "queueing", config: {
+        specification: {
+          business_context: {
+            business_type: org.business_type,
+            location: [org.city, org.region, org.country].filter(Boolean).join(", ") || null,
+            timezone: org.timezone,
+          },
+          simulation: { engine: "queueing", config: {
           arrival_rate_per_hour: Number(arrival), service_rate_per_hour_per_server: Number(service),
           servers: Number(servers), duration_hours: Number(duration),
-        } } },
+          } },
+        },
       }));
       setExperiments((items) => [experiment, ...items]); setActiveId(experiment.id); setShowNew(false); setTitle(""); setIdea(""); setAiDraft(null);
       setNotice("Experiment created. Review the baseline configuration, then start a run.");
@@ -356,7 +396,8 @@ export default function Home() {
     if (idea.trim().length < 20) { setError("Add a little more detail before asking AI for an experiment draft."); return; }
     setBusy(true); setError("");
     try {
-      const draft = await api<Interpretation>("/ai/interpret", getToken, jsonBody({ idea }));
+      const businessContext = org ? `\n\nWorkspace context (user-provided): business type: ${org.business_type}; location: ${[org.city, org.region, org.country].filter(Boolean).join(", ") || "not provided"}; time zone: ${org.timezone || "not provided"}. Use this only to interpret terminology and questions; do not infer demand or operating facts from location.` : "";
+      const draft = await api<Interpretation>("/ai/interpret", getToken, jsonBody({ idea: `${idea.trim()}${businessContext}` }));
       setAiDraft(draft); setTitle(draft.title); setDomain(draft.domain || "general"); setArrival(String(draft.simulation_config.arrival_rate_per_hour ?? ""));
       setService(String(draft.simulation_config.service_rate_per_hour_per_server ?? ""));
       setServers(String(draft.simulation_config.servers ?? "")); setDuration(String(draft.simulation_config.duration_hours ?? ""));
@@ -435,10 +476,21 @@ export default function Home() {
     try {
       const environment = await api<Environment>("/environments", getToken, jsonBody({
         organization_id: org.id, name: environmentName.trim(), environment_type: environmentType,
-        configuration: {}, provenance: { description: "Created in Sandbox workspace" },
+        configuration: {
+          business_type: org.business_type,
+          location: {
+            country: environmentCountry.trim() || null,
+            city: environmentCity.trim() || null,
+            latitude: environmentCoordinates.latitude,
+            longitude: environmentCoordinates.longitude,
+          },
+        },
+        provenance: { description: "Created in Sandbox workspace", location_source: "user_provided_or_explicit_browser_permission" },
       }));
       setEnvironments((items) => [environment, ...items]); setActiveEnvironmentId(environment.id);
-      setEnvironmentName(""); setNewEnvironmentOpen(false); setNotice("Environment created.");
+      setEnvironmentName(""); setEnvironmentCountry(""); setEnvironmentCity("");
+      setEnvironmentCoordinates({ latitude: null, longitude: null });
+      setNewEnvironmentOpen(false); setNotice("Environment created.");
     } catch (cause) { setError(explainError(cause)); }
     finally { setBusy(false); }
   }
@@ -463,6 +515,44 @@ export default function Home() {
     catch (cause) { setError(explainError(cause)); }
   }
 
+  async function saveWorkspaceProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!org) return;
+    setBusy(true); setError("");
+    try {
+      const updated = await api<Organization>(`/organizations/${org.id}`, getToken, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: workspaceName.trim(), business_type: businessType,
+          country: workspaceCountry.trim() || null, region: workspaceRegion.trim() || null,
+          city: workspaceCity.trim() || null, timezone: workspaceTimezone.trim() || null,
+          latitude: workspaceCoordinates.latitude, longitude: workspaceCoordinates.longitude,
+        }),
+      });
+      setOrg(updated); setWorkspaceSettingsOpen(false); setNotice("Workspace profile saved.");
+    } catch (cause) { setError(explainError(cause)); }
+    finally { setBusy(false); }
+  }
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) { setError("Location is not available in this browser."); return; }
+    setError("");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => setWorkspaceCoordinates({ latitude: Number(coords.latitude.toFixed(5)), longitude: Number(coords.longitude.toFixed(5)) }),
+      () => setError("Location was not shared. You can still save your country, region, and city."),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+    );
+  }
+
+  function locateEnvironment() {
+    if (!navigator.geolocation) { setError("Location is not available in this browser."); return; }
+    setError("");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => setEnvironmentCoordinates({ latitude: Number(coords.latitude.toFixed(5)), longitude: Number(coords.longitude.toFixed(5)) }),
+      () => setError("Location was not shared. You can still enter the environment city and country."),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+    );
+  }
+
   if (!user && loading) return <main className="min-h-screen p-6"><div className="mx-auto max-w-7xl"><div className="h-12 w-44 motion-safe:animate-pulse bg-muted" /><div className="mt-8 h-64 motion-safe:animate-pulse border border-border bg-card" /></div></main>;
   if (!user) return <AuthScreen onReady={ready} />;
 
@@ -478,7 +568,7 @@ export default function Home() {
     <div className="mx-auto flex min-h-screen max-w-[1600px]">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card p-5 md:flex">
         <div className="flex items-center justify-between"><Logo /><span className="bg-secondary px-2 py-1 text-xs font-bold uppercase tracking-wider text-secondary-foreground">Studio</span></div>
-        <button type="button" className="mt-9 flex min-h-11 items-center justify-between border border-border px-3 text-left text-sm font-semibold hover:bg-muted"><span className="truncate">{org?.name || "Workspace"}</span><ChevronDown size={15} aria-hidden="true" /></button>
+        <button type="button" onClick={() => setWorkspaceSettingsOpen((open) => !open)} aria-expanded={workspaceSettingsOpen} className="mt-9 flex min-h-11 w-full items-center justify-between border border-border px-3 text-left text-sm font-semibold hover:bg-muted"><span className="truncate">{org?.name || "Workspace"}</span><ChevronDown size={15} aria-hidden="true" /></button>
         <p className="mb-2 mt-8 text-xs font-bold uppercase tracking-widest text-muted-foreground">Workspace</p>
         <a href="#experiments" className="flex min-h-11 items-center gap-3 border-l-2 border-primary bg-accent px-3 text-sm font-bold"><FlaskConical size={16} aria-hidden="true" />Experiments</a>
         <a href="#environment" className="flex min-h-11 items-center gap-3 px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"><Database size={16} aria-hidden="true" />Environments</a>
@@ -504,11 +594,26 @@ export default function Home() {
               {error && <div role="alert" className="mb-5 flex items-start justify-between gap-3 border border-destructive bg-card p-4 text-sm"><span>{error}</span><div className="flex shrink-0 items-center gap-1">{token && <button type="button" onClick={() => void loadWorkspace(token).catch(() => undefined)} className="min-h-10 px-3 font-bold underline underline-offset-4">Retry</button>}<button type="button" onClick={() => setError("")} aria-label="Dismiss error" className="grid size-10 place-items-center hover:bg-muted"><X size={16} aria-hidden="true" /></button></div></div>}
           {notice && <div role="status" className="mb-5 flex items-center justify-between gap-3 border border-secondary bg-accent p-4 text-sm"><span className="flex items-center gap-2"><Check size={16} aria-hidden="true" />{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss message" className="grid size-10 shrink-0 place-items-center hover:bg-muted"><X size={16} aria-hidden="true" /></button></div>}
 
+          {workspaceSettingsOpen && org && <section className="rise mb-8 border-2 border-foreground bg-card">
+            <div className="border-b border-border p-5 sm:p-6"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Workspace profile</p><h2 className="mt-1 text-xl font-extrabold">Business context & location</h2><p className="mt-1 text-sm text-muted-foreground">Choose a sector and optionally add a business location to give experiment drafts useful context.</p></div>
+            <form onSubmit={saveWorkspaceProfile} className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+              <Field id="workspace-name" label="Workspace name" required maxLength={160} value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} />
+              <div className="space-y-1.5"><label htmlFor="business-type" className="text-sm font-semibold">Business type</label><select id="business-type" value={businessType} onChange={(event) => setBusinessType(event.target.value)} className="h-11 w-full border border-border bg-card px-3 text-sm"><option value="general">General / cross-industry</option><option value="technology">Technology & SaaS</option><option value="healthcare">Healthcare & life sciences</option><option value="finance">Finance & insurance</option><option value="retail">Retail & ecommerce</option><option value="manufacturing">Manufacturing</option><option value="logistics">Logistics & transportation</option><option value="hospitality">Hospitality & travel</option><option value="education">Education</option><option value="government">Government & public services</option><option value="energy">Energy & utilities</option><option value="construction">Construction & real estate</option><option value="agriculture">Agriculture & food</option><option value="media">Media & entertainment</option><option value="professional_services">Professional services</option><option value="nonprofit">Nonprofit</option><option value="other">Other</option></select></div>
+              <Field id="workspace-country" label="Country" autoComplete="country-name" value={workspaceCountry} onChange={(event) => setWorkspaceCountry(event.target.value)} placeholder="e.g. Nigeria" />
+              <Field id="workspace-region" label="State / region" autoComplete="address-level1" value={workspaceRegion} onChange={(event) => setWorkspaceRegion(event.target.value)} placeholder="e.g. Lagos State" />
+              <Field id="workspace-city" label="City" autoComplete="address-level2" value={workspaceCity} onChange={(event) => setWorkspaceCity(event.target.value)} placeholder="e.g. Lagos" />
+              <Field id="workspace-timezone" label="Time zone" value={workspaceTimezone} onChange={(event) => setWorkspaceTimezone(event.target.value)} placeholder="e.g. Africa/Lagos" hint="Used as business context; it does not change simulation time units." />
+              <div className="border border-border p-3 sm:col-span-2"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-start gap-2"><MapPin size={16} className="mt-0.5" aria-hidden="true" /><div><p className="text-sm font-semibold">Precise coordinates (optional)</p><p className="mt-1 text-xs text-muted-foreground">Browser location is requested only when you click the button. Firebase Authentication does not provide a business address or GPS location.</p></div></div><button type="button" onClick={useCurrentLocation} className="min-h-10 border border-border px-3 text-sm font-bold hover:bg-muted">Use current location</button></div>{workspaceCoordinates.latitude !== null && <p className="mt-3 font-mono text-xs text-muted-foreground">{workspaceCoordinates.latitude}, {workspaceCoordinates.longitude}</p>}</div>
+              <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setWorkspaceSettingsOpen(false)} className="min-h-11 border border-border px-4 text-sm font-semibold">Cancel</button><button type="submit" disabled={busy} className="min-h-11 border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground">Save workspace profile</button></div>
+            </form>
+          </section>}
+
           {showNew && <section className="rise mb-8 border-2 border-foreground bg-card">
             <div className="flex items-start justify-between border-b border-border p-5 sm:p-6"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">New experiment</p><h2 className="mt-1 text-xl font-extrabold">Start with a question</h2></div><button type="button" onClick={() => setShowNew(false)} aria-label="Close new experiment form" className="grid size-10 place-items-center hover:bg-muted"><X size={18} aria-hidden="true" /></button></div>
             <form onSubmit={createExperiment} className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1fr_1fr]" aria-busy={busy}>
               <div className="space-y-4">
                 <Field id="experiment-title" label="Experiment name" required maxLength={200} placeholder="e.g. Service desk capacity" value={title} onChange={(event) => setTitle(event.target.value)} />
+                <div className="border border-border bg-muted p-4"><p className="text-sm font-bold">Start with an industry prompt</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Prompts help frame the question. They do not supply business facts or model assumptions.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><select aria-label="Industry starter prompt" value={selectedStarter} onChange={(event) => setSelectedStarter(event.target.value)} className="h-11 min-w-0 flex-1 border border-border bg-card px-3 text-sm"><option value="">Choose a starting point…</option>{starterPrompts.map((starter) => <option key={starter.domain} value={starter.domain}>{starter.label}</option>)}</select><button type="button" disabled={!selectedStarter} onClick={() => { const starter = starterPrompts.find((item) => item.domain === selectedStarter); if (starter) { setTitle(starter.title); setIdea(starter.text); setDomain(starter.domain); setAiDraft(null); } }} className="min-h-11 border border-border bg-card px-4 text-sm font-bold hover:bg-background disabled:opacity-50">Use prompt</button></div></div>
                 {projects.length > 0 && projectForExperiment !== "__new" ? <div className="space-y-1.5"><label htmlFor="experiment-project" className="text-sm font-semibold">Project</label><select id="experiment-project" value={projectForExperiment} onChange={(event) => setProjectForExperiment(event.target.value)} className="h-11 w-full border border-border bg-card px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}<option value="__new">Create a new project…</option></select></div> : <Field id="project-name" label="Project name" required maxLength={160} value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} hint="Experiments are grouped into projects." />}
                 <div className="space-y-1.5"><label htmlFor="experiment-environment" className="text-sm font-semibold">Environment <span className="font-normal text-muted-foreground">(optional)</span></label><select id="experiment-environment" value={environmentForExperiment} onChange={(event) => setEnvironmentForExperiment(event.target.value)} className="h-11 w-full border border-border bg-card px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring"><option value="">No environment linked</option>{environments.map((environment) => <option key={environment.id} value={environment.id}>{environment.name}</option>)}</select><p className="text-xs text-muted-foreground">Attach source and provenance records to an experiment environment.</p></div>
                 <div className="space-y-1.5"><label htmlFor="idea" className="text-sm font-semibold">What are you trying to understand?</label><textarea id="idea" required minLength={5} rows={4} value={idea} onChange={(event) => setIdea(event.target.value)} placeholder="Describe the system and the decision you want to explore." className="w-full resize-y border border-border bg-card p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><p className="text-xs text-muted-foreground">AI can help turn this into a draft. You review every assumption before saving.</p></div>
@@ -578,7 +683,7 @@ export default function Home() {
             </div>
             <section id="environment" className="border border-border bg-card">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Environment library</p><h2 className="mt-1 text-lg font-extrabold">Sources & context</h2></div><button type="button" onClick={() => setNewEnvironmentOpen((open) => !open)} className="flex min-h-10 items-center gap-2 border border-border px-3 text-sm font-bold hover:bg-muted"><Plus size={15} aria-hidden="true" />New environment</button></div>
-              {newEnvironmentOpen && <form onSubmit={createEnvironment} className="grid gap-3 border-b border-border bg-muted p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><Field id="environment-name" label="Environment name" required value={environmentName} onChange={(event) => setEnvironmentName(event.target.value)} placeholder="e.g. Service desk, baseline" /><div className="space-y-1.5"><label htmlFor="environment-type" className="text-sm font-semibold">Environment type</label><select id="environment-type" value={environmentType} onChange={(event) => setEnvironmentType(event.target.value as Environment["environment_type"])} className="h-11 w-full border border-border bg-card px-3 text-sm"><option value="synthetic">Synthetic</option><option value="real_world">Real world</option><option value="digital_twin">Digital twin</option></select></div><button type="submit" disabled={busy} className="min-h-11 border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground">Save environment</button></form>}
+              {newEnvironmentOpen && <form onSubmit={createEnvironment} className="grid gap-3 border-b border-border bg-muted p-4 sm:grid-cols-2 xl:grid-cols-3 sm:items-end"><Field id="environment-name" label="Environment name" required value={environmentName} onChange={(event) => setEnvironmentName(event.target.value)} placeholder="e.g. Lagos service desk" /><div className="space-y-1.5"><label htmlFor="environment-type" className="text-sm font-semibold">Environment type</label><select id="environment-type" value={environmentType} onChange={(event) => setEnvironmentType(event.target.value as Environment["environment_type"])} className="h-11 w-full border border-border bg-card px-3 text-sm"><option value="synthetic">Synthetic</option><option value="real_world">Real world</option><option value="digital_twin">Digital twin</option></select></div><Field id="environment-country" label="Country" autoComplete="country-name" value={environmentCountry} onChange={(event) => setEnvironmentCountry(event.target.value)} placeholder="e.g. Nigeria" /><Field id="environment-city" label="City / area" autoComplete="address-level2" value={environmentCity} onChange={(event) => setEnvironmentCity(event.target.value)} placeholder="e.g. Lagos" /><div className="space-y-2"><p className="text-sm font-semibold">Coordinates <span className="font-normal text-muted-foreground">(optional)</span></p><button type="button" onClick={locateEnvironment} className="min-h-11 w-full border border-border bg-card px-3 text-sm font-bold hover:bg-background">{environmentCoordinates.latitude === null ? "Use current location" : `${environmentCoordinates.latitude}, ${environmentCoordinates.longitude}`}</button></div><div className="flex items-end"><button type="submit" disabled={busy} className="min-h-11 w-full border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground">Save environment</button></div><p className="text-xs leading-5 text-muted-foreground sm:col-span-2 xl:col-span-3">Location is optional. Current location is only requested after you choose the button, and it is stored as environment metadata. No map data is imported automatically.</p></form>}
               {environments.length ? <div className="grid gap-0 lg:grid-cols-[0.8fr_1.2fr]">
                 <div className="divide-y divide-border border-b border-border lg:border-b-0 lg:border-r">{environments.map((environment) => <button type="button" key={environment.id} onClick={() => void selectEnvironment(environment.id)} className={`flex min-h-16 w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted ${activeEnvironmentId === environment.id ? "bg-accent/60" : ""}`}><span className="min-w-0"><span className="block truncate text-sm font-bold">{environment.name}</span><span className="text-xs text-muted-foreground">{environment.environment_type.replaceAll("_", " ")} · v{environment.version}</span></span><ArrowUpRight size={16} aria-hidden="true" /></button>)}</div>
                 <div className="p-4"><p className="font-bold">{environments.find((item) => item.id === activeEnvironmentId)?.name || "Select an environment"}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Record dataset names, source links, and licenses for traceability. Attaching a source does not automatically import or validate its contents.</p>

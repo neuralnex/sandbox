@@ -4,10 +4,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
+COPY backend/gai.conf /etc/gai.conf
 COPY pyproject.toml ./
 COPY backend ./backend
-RUN pip install --no-cache-dir .
-COPY backend/gai.conf /etc/gai.conf
+RUN pip install --no-cache-dir --retries 10 --timeout 60 .
 COPY alembic.ini ./
 COPY migrations ./migrations
 
