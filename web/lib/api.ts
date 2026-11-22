@@ -39,10 +39,19 @@ export type Interpretation = {
   title: string; objective: string; domain: string; assumptions: string[];
   variables: { name: string; description: string; value: string | number | boolean | null; unit: string | null; rationale: string }[];
   missing_information: string[]; suggested_engine: string; simulation_config: Record<string, number | null>;
+  market_research: {
+    status: "ready" | "needs_clarification" | "not_researchable";
+    market_definition: string; target_customer: string | null; geography: string | null;
+    tam_low_usd: number | null; tam_high_usd: number | null; sam_low_usd: number | null; sam_high_usd: number | null;
+    method: string; assumptions: string[]; caveats: string[];
+    sources: { title: string; url: string; publisher: string | null; published_at: string | null; supports: string }[];
+  };
   configuration_valid: boolean; configuration_errors: string[]; interpretation_notice: string;
 };
 export type RunInterpretation = {
-  summary: string; findings: string[]; limitations: string[]; follow_up_questions: string[]; interpretation_notice: string;
+  summary: string; recommendation: string; upside: string[]; downside: string[]; cost_and_competition: string[]; evidence_gaps: string[];
+  findings: string[]; limitations: string[]; follow_up_questions: string[]; interpretation_notice: string;
+  evidence_sources: { name: string; source_url: string | null; license: string | null; provider: string | null; reference_area: string | null; period: string | null }[];
 };
 
 export async function api<T>(path: string, token: string | (() => Promise<string>), init: RequestInit = {}): Promise<T> {

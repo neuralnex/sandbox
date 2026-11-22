@@ -19,25 +19,34 @@ import { Data360Explorer } from "@/components/data360-explorer";
 const SESSION_KEY = "sandbox.api-session";
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 const profileSyncs = new Map<string, Promise<User>>();
+const DISCOVERY_QUESTIONS = [
+  { section: "Idea & problem", question: "What do you want to build?", hint: "Describe the product or service as you imagine it today.", placeholder: "A rough idea is enough. What should it help people do?" },
+  { section: "Idea & problem", question: "What frustrating problem or unmet need should it solve?", hint: "Think about what is difficult, slow, expensive, risky, or missing today.", placeholder: "Who experiences the problem, and what happens?" },
+  { section: "Idea & problem", question: "Why does this feel important to solve now?", hint: "A change in technology, habits, costs, policy, or your own experience may have sparked it.", placeholder: "What made you start thinking about this idea?" },
+  { section: "People & market", question: "Who are the first people or organizations you most want to help?", hint: "Describe the people who would get the most value first.", placeholder: "What are they trying to accomplish, and what makes their situation specific?" },
+  { section: "People & market", question: "Who would use it, who would choose it, and who would pay?", hint: "Those roles can belong to different people or organizations.", placeholder: "For example, a team may use a product while a manager buys it." },
+  { section: "People & market", question: "Where do you want to launch and serve people first?", hint: "Include countries, cities, regions, or online markets. Your workspace location is not a substitute.", placeholder: "For example: developers in Nigeria first, then other African markets." },
+  { section: "Product & delivery", question: "What needs to be available for your product to deliver its promise?", hint: "For a marketplace, think about providers and offerings as well as customers.", placeholder: "Who or what needs to participate, and what might make providers or partners join?" },
+  { section: "Product & delivery", question: "Who will come to use or buy it, and what are they trying to get done?", hint: "If the product brings two sides together, describe what would bring buyers to it and back again.", placeholder: "What would a customer be looking for, and when would they need it?" },
+  { section: "Product & delivery", question: "How does someone go from finding your product to getting value from it?", hint: "For a marketplace, include provider discovery, comparison, trials, payment, and what happens after purchase.", placeholder: "Walk through the experience in everyday language." },
+  { section: "Value & competition", question: "What do your potential customers use or do today instead?", hint: "If your idea connects two sides, include what both sides use today. Workarounds and doing nothing count too.", placeholder: "Name any alternatives you know, or describe the current workaround." },
+  { section: "Value & competition", question: "Why might customers—and providers, if your product connects two sides—choose it over those alternatives?", hint: "Different people may value different things.", placeholder: "What should feel better for each person or organization involved?" },
+  { section: "Value & competition", question: "How should people judge whether an offering is a good fit?", hint: "Consider quality, price, speed, reliability, safety, compatibility, or transparency.", placeholder: "Which information or proof would help someone choose confidently?" },
+  { section: "Business model & reach", question: "How might the product earn money or stay funded?", hint: "A possible approach is enough; you do not need a forecast.", placeholder: "For example: usage fees, subscriptions, commissions, listing fees, or grants." },
+  { section: "Business model & reach", question: "What would feel fair for customers to pay and providers or partners to earn, if both are involved?", hint: "Think about pricing, payouts, and the platform's share without needing exact figures.", placeholder: "For example: transparent usage pricing, subscriptions, or a small commission." },
+  { section: "Business model & reach", question: "How might you reach your first customers and attract any providers or partners you need?", hint: "If the idea serves two sides, it may need to build both sides—perhaps starting with one focused niche.", placeholder: "Consider communities, partnerships, direct sales, or existing networks." },
+  { section: "Trust & operations", question: "What must people be able to trust before they use your product?", hint: "Consider privacy, security, payments, permissions, safety, quality, and accountability. For a marketplace, what proof should providers offer?", placeholder: "What could go wrong, and what protection or transparency would matter?" },
+  { section: "Trust & operations", question: "What needs to happen behind the scenes for the experience to work reliably?", hint: "Think about onboarding, evaluation, support, uptime, disputes, moderation, or integrations.", placeholder: "What will you need to do for customers and any partners after signup?" },
+  { section: "Trust & operations", question: "Are there local rules, access limits, or dependencies that could shape the product?", hint: "Consider regulation, language, connectivity, payment methods, partners, or infrastructure.", placeholder: "Which conditions might matter in your first market? It is fine not to know yet." },
+  { section: "Readiness & validation", question: "What have you done so far to learn whether people want this?", hint: "Conversations, waitlists, sketches, prototypes, tests, or no research yet all count.", placeholder: "What have you heard or observed from potential customers, users, or partners?" },
+  { section: "Readiness & validation", question: "What resources, timing, or constraints should Sandbox know about?", hint: "People, partners, skills, budget limits, access, or deadlines are useful context.", placeholder: "Share practical realities. Exact figures are not required." },
+  { section: "Readiness & validation", question: "What would early success look like, and what worries you most?", hint: "Describe a meaningful first signal and the biggest reason the idea might fail.", placeholder: "What would make you more confident? What could stop this from working?" },
+] as const;
+
 const statusCopy: Record<string, string> = {
   queued: "Queued", running: "Running", cancel_requested: "Stopping",
   completed: "Complete", failed: "Failed", cancelled: "Cancelled",
 };
-
-const starterPrompts = [
-  { label: "Retail service desk · Queueing", domain: "retail", engine: "queueing", title: "Retail service capacity", text: "Explore whether staffing capacity can keep up with customer arrivals across the operating day. Identify arrival patterns, service time, team capacity, peak periods, and the wait-time target." },
-  { label: "Healthcare", domain: "healthcare", title: "Patient access and waiting", text: "Explore patient arrivals and service capacity for a care setting. Specify the service stages, observed arrival rate, service time, available staff, operating hours, and wait-time target. Do not assume clinical outcomes." },
-  { label: "Logistics · Inventory", domain: "logistics", engine: "inventory", title: "Fulfillment stock policy", text: "Explore how demand, reorder points, replenishment quantity, and supplier lead time affect order fulfillment and stockouts." },
-  { label: "Manufacturing · Inventory", domain: "manufacturing", engine: "inventory", title: "Production materials policy", text: "Explore how daily material demand, reorder point, replenishment quantity, and supplier lead time affect stock availability." },
-  { label: "Financial services · Queueing", domain: "finance", engine: "queueing", title: "Service operations capacity", text: "Explore incoming service requests against team capacity. Specify request arrivals, handling time, parallel agents, operating hours, and the service-level target." },
-  { label: "Education", domain: "education", title: "Learner support capacity", text: "Explore learner requests or appointments against support capacity. Specify arrivals, handling time, parallel staff, operating hours, and the wait-time or completion target." },
-  { label: "Hospitality · Queueing", domain: "hospitality", engine: "queueing", title: "Guest service flow", text: "Explore guest arrivals and service capacity. Specify arrival patterns, service time, parallel staff or stations, operating hours, and the wait-time target." },
-  { label: "Public services", domain: "government", title: "Public service access", text: "Explore incoming service cases against processing capacity. Specify arrivals, handling time, parallel staff, operating schedule, and the backlog or wait-time target." },
-  { label: "Technology & SaaS", domain: "technology", title: "Support queue capacity", text: "Explore incoming support tickets against team capacity. Specify arrival rate, resolution time, parallel agents, coverage hours, and the response-time or backlog target." },
-  { label: "Food & agriculture · Inventory", domain: "agriculture", engine: "inventory", title: "Seasonal supply inventory", text: "Explore how demand variation, reorder thresholds, order quantities, and supplier lead times affect the availability of perishable or seasonal supplies. Note that this starter model does not yet simulate spoilage." },
-  { label: "New venture · Monte Carlo", domain: "business_viability", engine: "monte_carlo", title: "Business viability range", text: "Explore a range of possible operating profits under low, most-likely, and high estimates for demand, price, and variable costs." },
-  { label: "Other business · Queueing", domain: "general", engine: "queueing", title: "Operations capacity", text: "Describe the work arriving in your system and the team or resources that process it. Specify arrival rate, service time, parallel capacity, operating period, and the outcome you want to measure." },
-];
 
 function explainError(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Try again.";
@@ -60,6 +69,12 @@ function formatMetric(name: string, value: unknown) {
   const displayValue = percentMetric ? value * 100 : value;
   const unit = percentMetric ? "%" : name.includes("minutes") ? " min" : name === "duration_hours" ? " h" : name === "duration_days" ? " days" : "";
   return `${Number(displayValue.toFixed(2))}${unit}`;
+}
+
+function formatMarketRange(low: number | null, high: number | null) {
+  if (low === null || high === null) return "Not estimated";
+  const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 });
+  return `${money.format(low)} – ${money.format(high)} / year`;
 }
 
 function Logo({ small = false }: { small?: boolean }) {
@@ -192,6 +207,9 @@ function AuthScreen({ onReady }: { onReady: (token: string) => Promise<void> }) 
 export default function Home() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const firebaseUid = useRef<string | null>(null);
+  const workspaceLoadId = useRef(0);
+  const draftingRef = useRef(false);
+  const interpretationRequests = useRef(new Set<string>());
   const [session, setSession] = useState<ApiSession | null>(null);
   const [token, setToken] = useState("");
   const [user, setUser] = useState<User | null>(null);
@@ -223,6 +241,7 @@ export default function Home() {
   const [activeId, setActiveId] = useState("");
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState("");
   const [selectedScenario, setSelectedScenario] = useState("");
   const [selectedRuns, setSelectedRuns] = useState<string[]>([]);
   const [comparison, setComparison] = useState<{ metrics: { metric: string; values: Record<string, number | string>; delta_from_first: Record<string, number> | null }[] } | null>(null);
@@ -247,8 +266,11 @@ export default function Home() {
   const [monteInputs, setMonteInputs] = useState({ trials: "5000", periods: "12", demand_min: "", demand_mode: "", demand_max: "", revenue_per_unit_min: "", revenue_per_unit_mode: "", revenue_per_unit_max: "", variable_cost_per_unit_min: "", variable_cost_per_unit_mode: "", variable_cost_per_unit_max: "", fixed_cost_per_period: "", starting_cash: "" });
   const [runSeed, setRunSeed] = useState("");
   const [domain, setDomain] = useState("general");
-  const [selectedStarter, setSelectedStarter] = useState("");
   const [aiDraft, setAiDraft] = useState<Interpretation | null>(null);
+  const [clarificationAnswers, setClarificationAnswers] = useState<Record<number, string>>({});
+  const [clarificationTranscript, setClarificationTranscript] = useState("");
+  const [questionDirection, setQuestionDirection] = useState<"next" | "previous">("next");
+  const [newStep, setNewStep] = useState(1);
   const [branchName, setBranchName] = useState("Higher arrivals");
   const [branchArrival, setBranchArrival] = useState("24");
 
@@ -272,10 +294,11 @@ export default function Home() {
         setFirebaseUser(nextUser);
         const hasRestSession = Boolean(sessionStorage.getItem(SESSION_KEY));
         if ((previousUid && previousUid !== nextUser?.uid) || (nextUser && hasRestSession)) {
+          workspaceLoadId.current += 1;
           sessionStorage.removeItem(SESSION_KEY);
           setSession(null); setToken(""); setUser(null); setOrg(null); setProjects([]);
           setExperiments([]); setEnvironments([]); setScenarios([]); setRuns([]);
-          setSelectedScenario(""); setSelectedRuns([]); setComparison(null); setRunExplanation(null);
+          setSelectedScenario(""); setSelectedRunId(""); setSelectedRuns([]); setComparison(null); setRunExplanation(null);
           setActiveId(""); setLoading(true); setError("");
         }
       });
@@ -311,6 +334,7 @@ export default function Home() {
   }, [firebaseUser, session]);
 
   const loadWorkspace = useCallback(async (accessToken: string) => {
+    const requestId = ++workspaceLoadId.current;
     setLoading(true); setError("");
     try {
       const [me, organizations, projectRows, experimentRows] = await Promise.all([
@@ -318,6 +342,11 @@ export default function Home() {
         api<Project[]>("/projects", accessToken), api<Experiment[]>("/experiments", accessToken),
       ]);
       const activeOrg = organizations[0] || null;
+      const environmentRows = activeOrg
+        ? await api<Environment[]>(`/environments?organization_id=${activeOrg.id}`, accessToken)
+        : [];
+      if (requestId !== workspaceLoadId.current) return;
+
       setUser(me); setOrg(activeOrg); setProjects(projectRows); setExperiments(experimentRows);
       if (activeOrg) {
         setWorkspaceName(activeOrg.name);
@@ -327,12 +356,15 @@ export default function Home() {
         setWorkspaceCoordinates({ latitude: activeOrg.latitude, longitude: activeOrg.longitude });
       }
       setProjectForExperiment((previous) => projectRows.some((item) => item.id === previous) ? previous : projectRows[0]?.id || "__new");
-      const environmentRows = organizations[0] ? await api<Environment[]>(`/environments?organization_id=${organizations[0].id}`, accessToken) : [];
       setEnvironments(environmentRows);
       setEnvironmentForExperiment((previous) => environmentRows.some((item) => item.id === previous) ? previous : "");
       setActiveId((previous) => experimentRows.some((item) => item.id === previous) ? previous : experimentRows[0]?.id || "");
-    } catch (cause) { setError(explainError(cause)); throw cause; }
-    finally { setLoading(false); }
+    } catch (cause) {
+      if (requestId === workspaceLoadId.current) setError(explainError(cause));
+      throw cause;
+    } finally {
+      if (requestId === workspaceLoadId.current) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -377,13 +409,38 @@ export default function Home() {
     return () => { cancelled = true; if (timer) window.clearInterval(timer); };
   }, [token, currentExperiment, liveRuns, getToken]);
 
+  const autoReviewRun = useMemo(() => runs.find((run) => run.scenario_id === selectedScenario && run.status === "completed") || null, [runs, selectedScenario]);
+  useEffect(() => {
+    if (!token || !autoReviewRun || interpretationRequests.current.has(autoReviewRun.id)) return;
+    interpretationRequests.current.add(autoReviewRun.id);
+    let cancelled = false;
+    void api<RunInterpretation>(`/ai/runs/${autoReviewRun.id}/interpret`, getToken, jsonBody({}))
+      .then((result) => { if (!cancelled) setRunExplanation({ runId: autoReviewRun.id, result }); })
+      .catch(() => { if (!cancelled) setNotice("The simulation finished. The balanced AI review could not be prepared yet; use Retry review below."); });
+    return () => { cancelled = true; };
+  }, [token, autoReviewRun?.id, getToken]);
+
   async function ready(accessToken: string) {
     setToken(accessToken); await loadWorkspace(accessToken);
   }
 
   async function logout() {
+    workspaceLoadId.current += 1;
     try { if (firebaseUser) await signOut(getFirebaseAuth()); } catch { /* Clear the local API session even if the SDK is unavailable. */ }
     sessionStorage.removeItem(SESSION_KEY); setSession(null); setFirebaseUser(null); setToken(""); setUser(null); setExperiments([]); setActiveId("");
+  }
+
+  function discoveryTranscript(answers: Record<number, string> = clarificationAnswers, firstAnswer: string = idea) {
+    return DISCOVERY_QUESTIONS.map((item, index) => {
+      const questionNumber = index + 1;
+      const answer = questionNumber === 1 ? firstAnswer : answers[questionNumber];
+      return `${questionNumber}. ${item.question}\nFounder answer: ${answer?.trim() || "Not sure yet; leave this unknown and do not assume an answer."}`;
+    }).join("\n\n");
+  }
+
+  function startNewExploration() {
+    setNewStep(1); setTitle(""); setIdea(""); setAiDraft(null); setClarificationAnswers({});
+    setClarificationTranscript(""); setQuestionDirection("next"); setSelectedRunId(""); setError(""); setNotice(""); setWorkspaceSettingsOpen(false); setShowNew(true);
   }
 
   async function createExperiment(event: FormEvent<HTMLFormElement>) {
@@ -396,40 +453,76 @@ export default function Home() {
         setProjects((items) => [...items, project!]);
         setProjectForExperiment(project.id);
       }
-      const simulationConfig = engine === "queueing" ? {
-        arrival_rate_per_hour: Number(arrival), service_rate_per_hour_per_server: Number(service),
-        servers: Number(servers), duration_hours: Number(duration),
-      } : engine === "inventory" ? Object.fromEntries(Object.entries(inventoryInputs).map(([key, value]) => [key, Number(value)])) : Object.fromEntries(Object.entries(monteInputs).map(([key, value]) => [key, Number(value)]));
+      const simulationConfig = aiDraft?.configuration_valid ? Object.fromEntries(Object.entries(aiDraft.simulation_config).filter(([, value]) => value !== null)) : null;
       const experiment = await api<Experiment>("/experiments", getToken, jsonBody({
-        project_id: project.id, environment_id: environmentForExperiment || null, title: title.trim(), description: idea.trim(), objective: idea.trim(), domain,
+        project_id: project.id, environment_id: null, title: title.trim() || aiDraft?.title || "New exploration", description: idea.trim(), objective: aiDraft?.objective || idea.trim(), domain,
         specification: {
           business_context: {
             business_type: org.business_type,
             location: [org.city, org.region, org.country].filter(Boolean).join(", ") || null,
             timezone: org.timezone,
           },
-          simulation: { engine, config: simulationConfig },
+          ...(simulationConfig ? { simulation: { engine, config: simulationConfig } } : {}),
+          discovery: {
+            user_description: idea.trim(),
+            user_answers: clarificationTranscript || discoveryTranscript(),
+            ai_assumptions: aiDraft?.assumptions || [],
+            unresolved_questions: [],
+            suggested_variables: aiDraft?.variables || [],
+            market_research: aiDraft?.market_research || null,
+            evidence_status: environmentForExperiment ? "environment_linked_not_used_for_calibration" : "no_external_evidence_attached",
+          },
         },
       }));
-      setExperiments((items) => [experiment, ...items]); setActiveId(experiment.id); setShowNew(false); setTitle(""); setIdea(""); setAiDraft(null);
-      setNotice("Experiment created. Review the baseline configuration, then start a run.");
+      setExperiments((items) => [experiment, ...items]); setActiveId(experiment.id); setSelectedRunId(""); setShowNew(false); setTitle(""); setIdea(""); setAiDraft(null); setClarificationAnswers({}); setClarificationTranscript(""); setNewStep(1);
+      if (simulationConfig) {
+        try {
+          const experimentScenarios = await api<Scenario[]>(`/experiments/${experiment.id}/scenarios`, getToken);
+          const baseline = experimentScenarios.find((scenario) => scenario.is_baseline);
+          if (!baseline) throw new Error("The baseline scenario was not created.");
+          const queuedRun = await api<Run>(`/scenarios/${baseline.id}/runs`, getToken, jsonBody({}));
+          setSelectedScenario(baseline.id); setRuns([queuedRun]);
+          setNotice("Exploration saved. Sandbox has started a provisional simulation; review its assumptions, sources, and limits alongside the results.");
+        } catch {
+          setNotice("Exploration saved with a runnable model, but Sandbox could not start the run yet. Use Run scenario from the dashboard to retry.");
+        }
+      } else {
+        setNotice("Exploration saved with its discovery and market research. No structurally valid model configuration was available, so no run was created.");
+      }
     } catch (cause) { setError(explainError(cause)); }
     finally { setBusy(false); }
   }
 
-  async function draftWithAi() {
-    if (engine !== "queueing") { setError("AI configuration drafts currently support the queueing model. Choose Queueing or enter assumptions directly."); return; }
-    if (idea.trim().length < 20) { setError("Add a little more detail before asking AI for an experiment draft."); return; }
-    setDrafting(true); setError("");
+  async function draftWithAi(answers: Record<number, string> = clarificationAnswers, firstAnswer: string = idea) {
+    if (draftingRef.current) return;
+    const transcript = discoveryTranscript(answers, firstAnswer);
+    draftingRef.current = true; setDrafting(true); setError("");
     try {
       const businessContext = org ? `\n\nWorkspace context (user-provided): business type: ${org.business_type}; location: ${[org.city, org.region, org.country].filter(Boolean).join(", ") || "not provided"}; time zone: ${org.timezone || "not provided"}. Use this only to interpret terminology and questions; do not infer demand or operating facts from location.` : "";
-      const draft = await api<Interpretation>("/ai/interpret", getToken, jsonBody({ idea: `${idea.trim()}${businessContext}` }));
-      setEngine("queueing"); setAiDraft(draft); setTitle(draft.title); setDomain(draft.domain || "general"); setArrival(String(draft.simulation_config.arrival_rate_per_hour ?? ""));
+      const draft = await api<Interpretation>("/ai/interpret", getToken, jsonBody({ idea: `Founder idea and completed 21-question discovery. The founder has completed the fixed questionnaire; do not ask another question. Treat skipped answers as unknown, not facts.\n\n${transcript}${businessContext}` }));
+      setEngine(draft.suggested_engine); setAiDraft(draft); setTitle(draft.title); setDomain(draft.domain || "general"); setArrival(String(draft.simulation_config.arrival_rate_per_hour ?? ""));
+      setClarificationTranscript(transcript);
       setService(String(draft.simulation_config.service_rate_per_hour_per_server ?? ""));
       setServers(String(draft.simulation_config.servers ?? "")); setDuration(String(draft.simulation_config.duration_hours ?? ""));
-      if (!draft.configuration_valid) setNotice("AI returned a draft with missing or unsupported configuration. Review the assumptions and fill in each required value.");
+      setInventoryInputs((previous) => Object.fromEntries(Object.keys(previous).map((key) => [key, draft.simulation_config[key] == null ? previous[key as keyof typeof previous] : String(draft.simulation_config[key])])) as typeof previous);
+      setMonteInputs((previous) => Object.fromEntries(Object.keys(previous).map((key) => [key, draft.simulation_config[key] == null ? previous[key as keyof typeof previous] : String(draft.simulation_config[key])])) as typeof previous);
+      setQuestionDirection("next"); setNewStep(22);
     } catch (cause) { setError(explainError(cause)); }
-    finally { setDrafting(false); }
+    finally { draftingRef.current = false; setDrafting(false); }
+  }
+
+  function continueDiscoveryQuestion() {
+    const answer = (newStep === 1 ? idea : clarificationAnswers[newStep] || "").trim() || "Not sure yet.";
+    const nextAnswers = newStep === 1 ? clarificationAnswers : { ...clarificationAnswers, [newStep]: answer };
+    if (newStep === 1) setIdea(answer);
+    else setClarificationAnswers(nextAnswers);
+    setError("");
+    if (newStep === 21) {
+      void draftWithAi(nextAnswers, idea);
+      return;
+    }
+    setQuestionDirection("next");
+    setNewStep((step) => Math.min(step + 1, 22));
   }
 
   async function startRun(scenario: Scenario) {
@@ -585,8 +678,9 @@ export default function Home() {
   const simulation = currentExperiment?.specification.simulation as { engine?: string; config?: Record<string, number> } | undefined;
   const currentEngine = simulation?.engine || "queueing";
   const config = simulation?.config || {};
-  const latestRun = runs[0];
-  const selectedScenarioRun = runs.find((run) => run.scenario_id === activeScenario?.id && run.status === "completed");
+  const selectedHistoryRun = runs.find((run) => run.id === selectedRunId) || null;
+  const latestRun = selectedHistoryRun || runs[0];
+  const selectedScenarioRun = selectedHistoryRun?.status === "completed" ? selectedHistoryRun : runs.find((run) => run.scenario_id === activeScenario?.id && run.status === "completed");
   const metricLabels: Record<string, string> = {
     customers_arrived: "Arrivals", customers_entered_service: "Entered service", customers_served: "Completed by horizon",
     customers_completed_after_horizon: "Completed after horizon", customers_unfinished_at_horizon: "Unfinished at horizon", mean_wait_minutes: "Average wait",
@@ -595,37 +689,41 @@ export default function Home() {
     replenishment_orders: "Replenishment orders", ending_inventory: "Ending inventory", net_operating_result: "Net operating result",
     mean_profit: "Mean profit", median_profit: "Median profit", p10_profit: "P10 profit", p90_profit: "P90 profit", probability_positive_profit: "Positive profit share", trials: "Trials",
   };
-  return <main className="min-h-screen">
+  return <main className="min-h-screen overflow-x-hidden">
     <div className="mx-auto flex min-h-screen max-w-[1600px]">
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card p-5 md:flex">
         <div className="flex items-center justify-between"><Logo /><span className="bg-secondary px-2 py-1 text-xs font-bold uppercase tracking-wider text-secondary-foreground">Studio</span></div>
         <button type="button" onClick={() => setWorkspaceSettingsOpen((open) => !open)} aria-expanded={workspaceSettingsOpen} className="mt-9 flex min-h-11 w-full items-center justify-between border border-border px-3 text-left text-sm font-semibold hover:bg-muted"><span className="truncate">{org?.name || "Workspace"}</span><ChevronDown size={15} aria-hidden="true" /></button>
         <p className="mb-2 mt-8 text-xs font-bold uppercase tracking-widest text-muted-foreground">Workspace</p>
-        <a href="#experiments" className="flex min-h-11 items-center gap-3 border-l-2 border-primary bg-accent px-3 text-sm font-bold"><FlaskConical size={16} aria-hidden="true" />Experiments</a>
+        <a href="#experiments" className="flex min-h-11 items-center gap-3 border-l-2 border-primary bg-accent px-3 text-sm font-bold"><FlaskConical size={16} aria-hidden="true" />Explorations</a>
         <a href="#environment" className="flex min-h-11 items-center gap-3 px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"><Database size={16} aria-hidden="true" />Environments</a>
         <a href="#reports" className="flex min-h-11 items-center gap-3 px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"><ArrowDownToLine size={16} aria-hidden="true" />Reports</a>
-        <div className="mt-9 flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Experiments</p><button type="button" onClick={() => setShowNew(true)} aria-label="Create experiment" className="grid size-10 place-items-center hover:bg-muted"><Plus size={17} aria-hidden="true" /></button></div>
-        <nav id="experiments" className="mt-2 space-y-1" aria-label="Experiments">
-          {experiments.length ? experiments.map((experiment) => <button type="button" key={experiment.id} onClick={() => { setActiveId(experiment.id); setComparison(null); }} className={`flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm ${activeId === experiment.id ? "bg-primary font-bold text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}><span className="size-2 shrink-0 rounded-full bg-secondary" /><span className="truncate">{experiment.title}</span></button>) : <p className="px-3 py-3 text-sm text-muted-foreground">No experiments yet.</p>}
+        <div className="mt-9 flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your explorations</p><button type="button" onClick={startNewExploration} aria-label="Start an exploration" className="grid size-10 place-items-center hover:bg-muted"><Plus size={17} aria-hidden="true" /></button></div>
+        <nav id="experiments" className="mt-2 max-h-[32vh] space-y-1 overflow-y-auto" aria-label="Experiments">
+          {experiments.length ? experiments.map((experiment) => <button type="button" key={experiment.id} onClick={() => { setShowNew(false); setSelectedRunId(""); setActiveId(experiment.id); setComparison(null); }} className={`flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm ${activeId === experiment.id ? "bg-primary font-bold text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}><span className="size-2 shrink-0 rounded-full bg-secondary" /><span className="truncate">{experiment.title}</span></button>) : <p className="px-3 py-3 text-sm text-muted-foreground">No explorations yet.</p>}
         </nav>
+        <div className="mt-6 min-h-0">
+          <p className="px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground">Recent runs</p>
+          {runs.length ? <nav aria-label="Recent runs" className="mt-2 max-h-[26vh] space-y-1 overflow-y-auto">{runs.slice(0, 8).map((run) => <button type="button" key={run.id} onClick={() => { setShowNew(false); setSelectedScenario(run.scenario_id); setSelectedRunId(run.id); setComparison(null); }} className={`w-full rounded-2xl px-3 py-2.5 text-left transition-colors ${selectedRunId === run.id ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}><span className="block truncate text-sm font-semibold">{scenarios.find((scenario) => scenario.id === run.scenario_id)?.name || "Scenario run"}</span><span className="mt-1 flex items-center justify-between gap-2 text-xs"><span className="truncate">Seed {run.seed}</span><span className="shrink-0 font-bold">{statusCopy[run.status] || run.status}</span></span></button>)}</nav> : <p className="px-3 py-2 text-xs leading-5 text-muted-foreground">Runs appear here after you start a scenario.</p>}
+        </div>
         <div className="mt-auto border-t border-border pt-4">
           <button type="button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} className="flex min-h-11 w-full items-center gap-3 px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">{theme === "light" ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}{theme === "light" ? "Dark appearance" : "Light appearance"}</button>
           <div className="mt-2 flex items-center gap-3 px-3 py-2"><span className="grid size-9 place-items-center rounded-full bg-secondary text-sm font-bold text-secondary-foreground">{user.username.slice(0, 1).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{user.username}</span><span className="block truncate text-xs text-muted-foreground">{user.email || "Sandbox member"}</span></span><button type="button" onClick={() => void logout()} aria-label="Sign out" className="grid size-10 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground"><LogOut size={16} aria-hidden="true" /></button></div>
         </div>
       </aside>
 
-      <section className="min-w-0 flex-1">
+      <section className="min-w-0 flex-1 overflow-x-hidden">
         <header className="flex min-h-16 items-center justify-between border-b border-border bg-background px-4 sm:px-6 lg:px-9">
-          <div className="flex min-w-0 items-center gap-2 md:hidden"><Logo small /><span className="font-bold">Sandbox</span><span className="border border-secondary px-1.5 py-1 text-xs font-bold uppercase tracking-wider text-secondary">Alpha</span><button type="button" onClick={() => setWorkspaceSettingsOpen((open) => !open)} aria-label="Workspace settings" aria-expanded={workspaceSettingsOpen} className="grid size-10 shrink-0 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground"><MapPin size={17} aria-hidden="true" /></button>{experiments.length > 0 && <select aria-label="Select experiment" value={activeId} onChange={(event) => { setActiveId(event.target.value); setComparison(null); }} className="min-h-10 min-w-0 max-w-36 border border-border bg-card px-2 text-xs font-semibold sm:max-w-56">{experiments.map((experiment) => <option key={experiment.id} value={experiment.id}>{experiment.title}</option>)}</select>}</div>
-          <div className="hidden items-center gap-2 text-xs text-muted-foreground md:flex"><span>Workspace</span><span>/</span><span className="font-semibold text-foreground">Experiments</span>{currentExperiment && <><span>/</span><span className="max-w-48 truncate font-semibold text-foreground">{currentExperiment.title}</span></>}<span className="ml-2 border border-secondary px-1.5 py-1 text-xs font-bold uppercase tracking-wider text-secondary">Alpha</span></div>
-          <div className="flex items-center gap-2"><button type="button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} appearance`} className="grid size-10 place-items-center hover:bg-muted md:hidden">{theme === "light" ? <Moon size={17} aria-hidden="true" /> : <Sun size={17} aria-hidden="true" />}</button><button type="button" onClick={() => setShowNew(true)} className="flex min-h-10 items-center gap-2 border border-foreground bg-primary px-3 text-sm font-extrabold text-primary-foreground hover:brightness-95"><Plus size={16} aria-hidden="true" /><span className="hidden sm:inline">New experiment</span><span className="sm:hidden">New</span></button><button type="button" onClick={() => void logout()} aria-label="Sign out" className="grid size-10 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"><LogOut size={16} aria-hidden="true" /></button></div>
+          <div className="flex min-w-0 items-center gap-2 md:hidden"><Logo small /><span className="font-bold">Sandbox</span><span className="border border-secondary px-1.5 py-1 text-xs font-bold uppercase tracking-wider text-secondary">Alpha</span><button type="button" onClick={() => setWorkspaceSettingsOpen((open) => !open)} aria-label="Workspace settings" aria-expanded={workspaceSettingsOpen} className="grid size-10 shrink-0 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground"><MapPin size={17} aria-hidden="true" /></button>{experiments.length > 0 && <select aria-label="Select experiment" value={activeId} onChange={(event) => { setShowNew(false); setSelectedRunId(""); setActiveId(event.target.value); setComparison(null); }} className="min-h-10 min-w-0 max-w-36 border border-border bg-card px-2 text-xs font-semibold sm:max-w-56">{experiments.map((experiment) => <option key={experiment.id} value={experiment.id}>{experiment.title}</option>)}</select>}</div>
+          <div className="hidden items-center gap-2 text-xs text-muted-foreground md:flex"><span>Workspace</span><span>/</span><span className="font-semibold text-foreground">Explorations</span>{currentExperiment && <><span>/</span><span className="max-w-48 truncate font-semibold text-foreground">{currentExperiment.title}</span></>}<span className="ml-2 border border-secondary px-1.5 py-1 text-xs font-bold uppercase tracking-wider text-secondary">Alpha</span></div>
+          <div className="flex items-center gap-2"><button type="button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} appearance`} className="grid size-10 place-items-center hover:bg-muted md:hidden">{theme === "light" ? <Moon size={17} aria-hidden="true" /> : <Sun size={17} aria-hidden="true" />}</button><button type="button" onClick={startNewExploration} className="flex min-h-10 items-center gap-2 border border-foreground bg-primary px-3 text-sm font-extrabold text-primary-foreground hover:brightness-95"><Plus size={16} aria-hidden="true" /><span className="hidden sm:inline">New exploration</span><span className="sm:hidden">New</span></button><button type="button" onClick={() => void logout()} aria-label="Sign out" className="grid size-10 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"><LogOut size={16} aria-hidden="true" /></button></div>
         </header>
 
         <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-9 lg:py-10">
-              {error && <div role="alert" className="mb-5 flex items-start justify-between gap-3 border border-destructive bg-card p-4 text-sm"><span>{error}</span><div className="flex shrink-0 items-center gap-1">{token && <button type="button" onClick={() => void loadWorkspace(token).catch(() => undefined)} className="min-h-10 px-3 font-bold underline underline-offset-4">Retry</button>}<button type="button" onClick={() => setError("")} aria-label="Dismiss error" className="grid size-10 place-items-center hover:bg-muted"><X size={16} aria-hidden="true" /></button></div></div>}
-          {notice && <div role="status" className="mb-5 flex items-center justify-between gap-3 border border-secondary bg-accent p-4 text-sm"><span className="flex items-center gap-2"><Check size={16} aria-hidden="true" />{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss message" className="grid size-10 shrink-0 place-items-center hover:bg-muted"><X size={16} aria-hidden="true" /></button></div>}
+          {!showNew && error && <div role="alert" className="mb-5 flex items-start justify-between gap-3 border border-destructive bg-card p-4 text-sm"><span>{error}</span><div className="flex shrink-0 items-center gap-1">{token && <button type="button" onClick={() => void loadWorkspace(token).catch(() => undefined)} className="min-h-10 px-3 font-bold underline underline-offset-4">Retry</button>}<button type="button" onClick={() => setError("")} aria-label="Dismiss error" className="grid size-10 place-items-center hover:bg-muted"><X size={16} aria-hidden="true" /></button></div></div>}
+          {!showNew && notice && <div role="status" className="mb-5 flex items-center justify-between gap-3 border border-secondary bg-accent p-4 text-sm"><span className="flex items-center gap-2"><Check size={16} aria-hidden="true" />{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss message" className="grid size-10 shrink-0 place-items-center hover:bg-muted"><X size={16} aria-hidden="true" /></button></div>}
 
-          {workspaceSettingsOpen && org && <section className="rise mb-8 border-2 border-foreground bg-card">
+          {workspaceSettingsOpen && !showNew && org && <section className="rise mb-8 border-2 border-foreground bg-card">
             <div className="border-b border-border p-5 sm:p-6"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Workspace profile</p><h2 className="mt-1 text-xl font-extrabold">Business context & location</h2><p className="mt-1 text-sm text-muted-foreground">Choose a sector and optionally add a business location to give experiment drafts useful context.</p></div>
             <form onSubmit={saveWorkspaceProfile} className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
               <Field id="workspace-name" label="Workspace name" required maxLength={160} value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} />
@@ -639,48 +737,78 @@ export default function Home() {
             </form>
           </section>}
 
-          {showNew && <section className="rise mb-8 border-2 border-foreground bg-card">
-            <div className="flex items-start justify-between border-b border-border p-5 sm:p-6"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">New experiment</p><h2 className="mt-1 text-xl font-extrabold">Start with a question</h2></div><button type="button" onClick={() => setShowNew(false)} aria-label="Close new experiment form" className="grid size-10 place-items-center hover:bg-muted"><X size={18} aria-hidden="true" /></button></div>
-            <form onSubmit={createExperiment} className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1fr_1fr]" aria-busy={busy || drafting}>
-              <div className="space-y-4">
-                <Field id="experiment-title" label="Experiment name" required maxLength={200} placeholder="e.g. Service desk capacity" value={title} onChange={(event) => setTitle(event.target.value)} />
-                <div className="border border-border bg-muted p-4"><p className="text-sm font-bold">Start with an industry prompt</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Prompts help frame the question. They do not supply business facts or model assumptions.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><select aria-label="Industry starter prompt" value={selectedStarter} onChange={(event) => setSelectedStarter(event.target.value)} className="h-11 min-w-0 flex-1 border border-border bg-card px-3 text-sm"><option value="">Choose a starting point…</option>{starterPrompts.map((starter) => <option key={starter.label} value={starter.label}>{starter.label}</option>)}</select><button type="button" disabled={!selectedStarter} onClick={() => { const starter = starterPrompts.find((item) => item.label === selectedStarter); if (starter) { setTitle(starter.title); setIdea(starter.text); setDomain(starter.domain); setEngine(starter.engine || "queueing"); setAiDraft(null); } }} className="min-h-11 border border-border bg-card px-4 text-sm font-bold hover:bg-background disabled:opacity-50">Use prompt</button></div></div>
-                {projects.length > 0 && projectForExperiment !== "__new" ? <div className="space-y-1.5"><label htmlFor="experiment-project" className="text-sm font-semibold">Project</label><select id="experiment-project" value={projectForExperiment} onChange={(event) => setProjectForExperiment(event.target.value)} className="h-11 w-full border border-border bg-card px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}<option value="__new">Create a new project…</option></select></div> : <Field id="project-name" label="Project name" required maxLength={160} value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} hint="Experiments are grouped into projects." />}
-                <div className="space-y-1.5"><label htmlFor="experiment-environment" className="text-sm font-semibold">Environment <span className="font-normal text-muted-foreground">(optional)</span></label><select id="experiment-environment" value={environmentForExperiment} onChange={(event) => setEnvironmentForExperiment(event.target.value)} className="h-11 w-full border border-border bg-card px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring"><option value="">No environment linked</option>{environments.map((environment) => <option key={environment.id} value={environment.id}>{environment.name}</option>)}</select><p className="text-xs text-muted-foreground">Attach source and provenance records to an experiment environment.</p></div>
-                <div className="space-y-1.5"><label htmlFor="idea" className="text-sm font-semibold">What are you trying to understand?</label><textarea id="idea" required minLength={5} rows={4} value={idea} onChange={(event) => setIdea(event.target.value)} placeholder="Describe the system and the decision you want to explore." className="w-full resize-y border border-border bg-card p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><p className="text-xs text-muted-foreground">AI can help turn this into a draft. You review every assumption before saving.</p></div>
-                <button id="draft-ai" type="button" disabled={busy || drafting || engine !== "queueing" || idea.trim().length < 20} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void draftWithAi(); }} title={engine !== "queueing" ? "AI drafts currently support Queueing" : undefined} className="flex min-h-11 items-center gap-2 border border-border px-4 text-sm font-bold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"><Sparkles size={16} aria-hidden="true" />{drafting ? "Drafting…" : engine === "queueing" ? "Draft configuration with AI" : "AI draft · Queueing only"}</button>
-                {aiDraft && <div className="border border-border bg-muted p-4 text-sm"><p className="font-bold">AI draft · {aiDraft.suggested_engine}</p><p className="mt-1 text-muted-foreground">{aiDraft.interpretation_notice}</p>{aiDraft.assumptions.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5">{aiDraft.assumptions.map((item) => <li key={item}>{item}</li>)}</ul>}{aiDraft.missing_information.length > 0 && <div className="mt-3"><p className="font-semibold">Questions to resolve</p><ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{aiDraft.missing_information.map((item) => <li key={item}>{item}</li>)}</ul></div>}{aiDraft.configuration_errors.length > 0 && <p className="mt-3 font-semibold text-destructive">{aiDraft.configuration_errors.join(" ")}</p>}</div>}
-              </div>
-              <div className="border border-border bg-background p-4 sm:p-5">
-                <div className="flex items-center gap-2"><Settings2 size={17} aria-hidden="true" /><h3 className="font-extrabold">Simulation model</h3></div>
-                <label htmlFor="simulation-engine" className="mt-4 block text-sm font-semibold">Model type</label><select id="simulation-engine" value={engine} onChange={(event) => { setEngine(event.target.value); setAiDraft(null); }} className="mt-1 h-11 w-full border border-border bg-card px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring"><option value="queueing">Queueing · service capacity</option><option value="inventory">Inventory · replenishment and stockouts</option><option value="monte_carlo">Monte Carlo · business outcome range</option></select>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">{engine === "queueing" ? "Discrete event flow with exponential arrivals and service times across parallel servers." : engine === "inventory" ? "Daily demand, reorder thresholds, supplier lead time, and stock availability." : "Repeated trials over user-entered low, likely, and high estimates; not a calibrated forecast."} Enter your own assumptions; example values in field hints are not prefilled.</p>
-                {engine === "queueing" && <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <Field id="arrival" label="Arrivals per hour" type="text" inputMode="decimal" pattern="[0-9]+([.][0-9]+)?" required placeholder="e.g. 18" value={arrival} onChange={(event) => setArrival(event.target.value)} />
-                  <Field id="service" label="Service rate per server" type="text" inputMode="decimal" pattern="[0-9]+([.][0-9]+)?" required placeholder="e.g. 24" value={service} onChange={(event) => setService(event.target.value)} hint="Jobs per hour, each server" />
-                  <Field id="servers" label="Number of servers" type="text" inputMode="numeric" pattern="[0-9]+" required placeholder="e.g. 2" value={servers} onChange={(event) => setServers(event.target.value)} />
-                  <Field id="duration" label="Run duration (hours)" type="text" inputMode="decimal" pattern="[0-9]+([.][0-9]+)?" required placeholder="e.g. 8" value={duration} onChange={(event) => setDuration(event.target.value)} />
-                </div>}
-                {engine === "inventory" && <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  {([ ["average_daily_demand", "Average demand / day", "120"], ["demand_std_dev", "Demand variation / day", "20"], ["initial_inventory", "Starting inventory", "600"], ["reorder_point", "Reorder point", "250"], ["order_quantity", "Order quantity", "500"], ["lead_time_days", "Supplier lead time (days)", "3"], ["duration_days", "Run duration (days)", "30"], ["unit_price", "Revenue per unit", "12"], ["unit_cost", "Purchase cost per unit", "6"], ["holding_cost_per_unit_day", "Holding cost / unit / day", "0.02"], ["stockout_cost_per_unit", "Stockout cost per unit", "2"]] as const).map(([key, label, placeholder]) => <Field key={key} id={`inventory-${key}`} label={label} type="number" min="0" step="any" required placeholder={placeholder} value={inventoryInputs[key]} onChange={(event) => setInventoryInputs((previous) => ({ ...previous, [key]: event.target.value }))} />)}
-                </div>}
-                {engine === "monte_carlo" && <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  {([ ["trials", "Trials", "5000"], ["periods", "Periods", "12"], ["demand_min", "Demand · low", "80"], ["demand_mode", "Demand · most likely", "120"], ["demand_max", "Demand · high", "170"], ["revenue_per_unit_min", "Price · low", "10"], ["revenue_per_unit_mode", "Price · most likely", "12"], ["revenue_per_unit_max", "Price · high", "15"], ["variable_cost_per_unit_min", "Variable cost · low", "5"], ["variable_cost_per_unit_mode", "Variable cost · most likely", "6"], ["variable_cost_per_unit_max", "Variable cost · high", "8"], ["fixed_cost_per_period", "Fixed cost / period", "500"], ["starting_cash", "Starting cash", "10000"]] as const).map(([key, label, placeholder]) => <Field key={key} id={`monte-${key}`} label={label} type="number" min="0" step="any" required placeholder={placeholder} value={monteInputs[key]} onChange={(event) => setMonteInputs((previous) => ({ ...previous, [key]: event.target.value }))} />)}
-                  <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">For each range, enter low ≤ most likely ≤ high. Demand and prices are modeled as independent triangular distributions.</p>
-                </div>}
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="max-w-sm text-xs leading-5 text-muted-foreground">Modelled outputs depend on the inputs and engine assumptions. They are not forecasts.</p><button disabled={busy || drafting} type="submit" className="flex min-h-11 items-center gap-2 border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground disabled:opacity-60">{busy && !drafting && <LoaderCircle size={15} className="motion-safe:animate-spin" aria-hidden="true" />}Save experiment</button></div>
-              </div>
+          {showNew && <section className="glass-panel rise mb-8 min-w-0 overflow-hidden">
+            <div className="flex items-start justify-between border-b border-border/60 p-5 sm:p-6">
+              <div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Founder discovery</p><h2 className="mt-1 text-xl font-extrabold">A clear picture of your idea</h2></div>
+              <button type="button" onClick={() => setShowNew(false)} aria-label="Close exploration questions" className="glass-icon grid size-11 place-items-center"><X size={18} aria-hidden="true" /></button>
+            </div>
+            <form onSubmit={(event) => { event.preventDefault(); if (newStep === 22) void createExperiment(event); else continueDiscoveryQuestion(); }} className="mx-auto w-full min-w-0 max-w-3xl p-4 sm:p-8" aria-busy={busy || drafting}>
+              {newStep <= 21 && (() => {
+                const question = DISCOVERY_QUESTIONS[newStep - 1];
+                const sectionIndex = Math.floor((newStep - 1) / 3);
+                const sectionNames = ["Idea & problem", "People & market", "Product & delivery", "Value & competition", "Business model & reach", "Trust & operations", "Readiness & validation"];
+                const answer = newStep === 1 ? idea : clarificationAnswers[newStep] || "";
+                return <div key={newStep} className={`question-slide-in question-slide-in-${questionDirection}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-accent/80 px-3 py-1.5 text-xs font-bold"><Sparkles size={14} aria-hidden="true" /> Set {sectionIndex + 1} of 7 · {sectionNames[sectionIndex]}</span>
+                    <span className="font-mono text-xs text-muted-foreground">Question {newStep} of 21</span>
+                  </div>
+                  <div className="mt-5 grid gap-1.5" style={{ gridTemplateColumns: "repeat(21, minmax(0, 1fr))" }} aria-label={`Question ${newStep} of 21`}>
+                    {DISCOVERY_QUESTIONS.map((_, index) => <span key={index} className={`h-1.5 rounded-full transition-colors duration-300 ${index < newStep ? "bg-secondary" : "bg-foreground/10"}`} />)}
+                  </div>
+                  <p className="mt-7 text-sm leading-6 text-muted-foreground">{question.hint}</p>
+                  <label htmlFor="discovery-answer" className="mt-2 block break-words text-2xl font-extrabold leading-tight sm:text-3xl">{question.question}</label>
+                  <textarea id="discovery-answer" autoFocus rows={5} value={answer} onChange={(event) => newStep === 1 ? setIdea(event.target.value) : setClarificationAnswers((previous) => ({ ...previous, [newStep]: event.target.value }))} placeholder={question.placeholder} className="glass-control mt-6 w-full min-w-0 resize-y p-4 text-base leading-7" />
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">Answer in plain language. Exact figures are not expected. If you are unsure, leave this blank and we will mark it as unknown.</p>
+                  {error && <div role="alert" className="mt-4 rounded-2xl border border-destructive bg-card p-3 text-sm">{error}</div>}
+                  <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <button type="button" disabled={newStep === 1 || drafting} onClick={() => { setQuestionDirection("previous"); setNewStep((step) => Math.max(1, step - 1)); setError(""); }} className="glass-button min-h-11 px-4 text-sm font-semibold disabled:opacity-40">Previous</button>
+                    <button type="button" disabled={drafting} onClick={continueDiscoveryQuestion} className="glass-primary flex min-h-11 items-center justify-center px-5 text-sm font-extrabold disabled:opacity-60">{newStep === 21 ? drafting ? "Researching your idea…" : "Review your summary" : "Continue"}<ArrowUpRight size={16} className="ml-2" aria-hidden="true" /></button>
+                  </div>
+                </div>;
+              })()}
+              {newStep === 22 && aiDraft && <div className="question-slide-in question-slide-in-next space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-3"><span className="inline-flex items-center gap-2 rounded-full bg-accent/80 px-3 py-1.5 text-xs font-bold"><Check size={14} aria-hidden="true" /> Summary · Ready for Sandbox</span><span className="font-mono text-xs text-muted-foreground">Page 22 of 22</span></div>
+                <div className="grid gap-1.5" style={{ gridTemplateColumns: "repeat(22, minmax(0, 1fr))" }} aria-hidden="true">{Array.from({ length: 22 }, (_, index) => <span key={index} className="h-1.5 rounded-full bg-secondary" />)}</div>
+                <header><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your idea, refined</p><h3 className="mt-2 break-words text-2xl font-black leading-tight sm:text-3xl">{aiDraft.title || title || "Your exploration"}</h3><p className="mt-3 break-words text-sm leading-6 text-muted-foreground">{aiDraft.objective}</p></header>
+
+                <section className="glass-question" aria-label="Market research summary">
+                  <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Market research</p><h4 className="mt-1 break-words text-lg font-extrabold">{aiDraft.market_research.market_definition || "Market opportunity"}</h4></div><span className="rounded-full bg-secondary/15 px-3 py-1.5 text-xs font-bold">{aiDraft.market_research.status === "ready" ? "Sources found" : aiDraft.market_research.status === "needs_clarification" ? "More evidence needed" : "No reliable estimate"}</span></div>
+                  <p className="mt-3 break-words text-sm leading-5"><strong>Audience:</strong> {aiDraft.market_research.target_customer || "Not established from your answers"}</p><p className="mt-1 break-words text-sm leading-5"><strong>Geography:</strong> {aiDraft.market_research.geography || "Not established from your answers"}</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-border/60 bg-card/60 p-4"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total addressable market · TAM</p><p className="mt-2 text-lg font-extrabold">{formatMarketRange(aiDraft.market_research.tam_low_usd, aiDraft.market_research.tam_high_usd)}</p></div><div className="rounded-2xl border border-border/60 bg-card/60 p-4"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Serviceable market · SAM</p><p className="mt-2 text-lg font-extrabold">{formatMarketRange(aiDraft.market_research.sam_low_usd, aiDraft.market_research.sam_high_usd)}</p></div></div>
+                  <p className="mt-4 text-sm leading-6">{aiDraft.market_research.method}</p>
+                  {aiDraft.market_research.assumptions.length > 0 && <div className="mt-4"><p className="text-xs font-bold uppercase tracking-wider">Sizing assumptions</p><ul className="mt-2 space-y-1 text-sm leading-5">{aiDraft.market_research.assumptions.map((item) => <li key={item}>• {item}</li>)}</ul></div>}
+                  <div className="mt-4 border-t border-border/60 pt-3"><p className="text-xs font-bold uppercase tracking-wider">Sources reviewed</p>{aiDraft.market_research.sources.length > 0 ? <ul className="mt-2 space-y-2">{aiDraft.market_research.sources.map((source) => <li key={source.url} className="text-xs leading-5"><a href={source.url} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">{source.title}</a><span className="text-muted-foreground"> · {[source.publisher, source.published_at].filter(Boolean).join(" · ")}</span><p className="text-muted-foreground">Supports: {source.supports}</p></li>)}</ul> : <p className="mt-2 text-sm leading-5 text-muted-foreground">No credible source was returned for a market estimate. The ranges remain unestimated.</p>}</div>
+                  {aiDraft.market_research.caveats.length > 0 && <div className="mt-4 rounded-2xl border border-border/60 bg-card/50 p-3"><p className="text-xs font-bold uppercase tracking-wider">Research limits</p><ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">{aiDraft.market_research.caveats.map((item) => <li key={item}>• {item}</li>)}</ul></div>}
+                  <p className="mt-4 border-t border-border/60 pt-3 text-xs leading-5 text-muted-foreground">TAM and SAM are sourced estimates with assumptions, not a forecast of sales. Market research does not calibrate the simulation.</p>
+                </section>
+
+                <section className="glass-question" aria-label="Balanced idea review"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">What looks promising and what could go wrong</p><div className="mt-4 grid gap-5 sm:grid-cols-2"><div><h4 className="font-extrabold">Founder’s intended value</h4><p className="mt-2 break-words text-sm leading-5">{clarificationAnswers[11]?.trim() || "No specific advantage was provided yet; treat differentiation as an open question."}</p></div><div><h4 className="font-extrabold">Risks and unknowns</h4><ul className="mt-2 space-y-2 text-sm leading-5 text-muted-foreground">{[...aiDraft.market_research.caveats, ...aiDraft.missing_information].slice(0, 6).map((item) => <li key={item} className="break-words">• {item}</li>)}{aiDraft.market_research.caveats.length === 0 && aiDraft.missing_information.length === 0 && <li>• Costs, competition, and adoption still need independent validation.</li>}</ul></div></div></section>
+
+                <section className="glass-question" aria-label="Costs and competition"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Costs and competition</p><p className="mt-2 text-sm leading-6">Your answers and the sources above can surface alternatives people use today. This research draft does not provide verified competitor comparisons or operating costs. Treat both as open questions until supported by specific evidence.</p><p className="mt-2 text-xs leading-5 text-muted-foreground">The sandbox model does not include acquisition costs, staffing or infrastructure expenses, pricing, payment fees, or competitor behavior unless those are explicitly represented in its assumptions.</p></section>
+
+                <section className="glass-question" aria-label="Model readiness"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sandbox model readiness</p><p className="mt-2 text-sm leading-6">{aiDraft.configuration_valid ? `Sandbox prepared a provisional ${aiDraft.suggested_engine.replaceAll("_", " ")} scenario using cited benchmarks where available and clearly labeled assumptions where evidence is missing. Its outputs are conditional model results, not verified real-world truth or a forecast.` : "No available model could represent a useful question with responsibly bounded inputs yet. Your idea and research will still be saved; the dashboard will explain the model limitations."}</p>{aiDraft.assumptions.length > 0 && <div className="mt-3"><h4 className="text-xs font-bold uppercase tracking-wider">Scenario assumptions to review</h4><ul className="mt-2 space-y-1 text-sm leading-5">{aiDraft.assumptions.map((item) => <li key={item}>• {item}</li>)}</ul></div>}{aiDraft.variables.length > 0 && <ul className="mt-3 space-y-2">{aiDraft.variables.map((variable) => <li key={variable.name} className="text-sm"><strong>{variable.name.replaceAll("_", " ")}:</strong> {variable.value ?? "Not estimated"}{variable.unit ? ` ${variable.unit}` : ""}<p className="text-xs leading-5 text-muted-foreground">{variable.rationale}</p></li>)}</ul>}{aiDraft.configuration_errors.length > 0 && <ul className="mt-3 space-y-1 text-xs leading-5 text-muted-foreground">{aiDraft.configuration_errors.map((item) => <li key={item}>• {item}</li>)}</ul>}</section>
+
+                <details className="glass-question"><summary className="cursor-pointer font-extrabold">Your answers · 21 questions in seven sets</summary><div className="mt-4 space-y-5">{Array.from({ length: 7 }, (_, setIndex) => <section key={setIndex}><h4 className="font-bold">Set {setIndex + 1} · {DISCOVERY_QUESTIONS[setIndex * 3].section}</h4><dl className="mt-2 space-y-3">{DISCOVERY_QUESTIONS.slice(setIndex * 3, setIndex * 3 + 3).map((item, offset) => { const questionNumber = setIndex * 3 + offset + 1; const answer = questionNumber === 1 ? idea : clarificationAnswers[questionNumber]; return <div key={questionNumber} className="border-t border-border/60 pt-2"><dt className="text-xs font-semibold text-muted-foreground">{questionNumber}. {item.question}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm">{answer?.trim() || "Not sure yet."}</dd></div>; })}</dl></section>)}</div></details>
+
+                {error && <div role="alert" className="rounded-2xl border border-destructive bg-card p-3 text-sm">{error}</div>}
+                <p className="text-xs leading-5 text-muted-foreground">AI research and commentary can be incomplete. Sources do not guarantee demand, costs or competitors. You can edit your answers before starting the exploration.</p>
+                <div className="flex flex-col-reverse gap-3 border-t border-border/60 pt-5 sm:flex-row sm:items-center sm:justify-between"><button type="button" disabled={busy} onClick={() => { setQuestionDirection("previous"); setNewStep(21); }} className="glass-button min-h-11 px-4 text-sm font-semibold">Back to question 21</button><button disabled={busy || drafting} type="submit" className="glass-primary flex min-h-12 items-center justify-center px-6 text-sm font-extrabold disabled:opacity-60">{busy ? <LoaderCircle size={16} className="mr-2 motion-safe:animate-spin" aria-hidden="true" /> : null}Enter Sandbox<ArrowUpRight size={16} className="ml-2" aria-hidden="true" /></button></div>
+              </div>}
+              {newStep === 22 && !aiDraft && <div className="py-12 text-center"><LoaderCircle size={24} className="mx-auto motion-safe:animate-spin" aria-hidden="true" /><p className="mt-4 font-semibold">Researching your idea and preparing the summary…</p></div>}
             </form>
           </section>}
 
-          {!currentExperiment ? <section className="mx-auto max-w-3xl border-2 border-foreground bg-card p-6 sm:p-10">
+          {!showNew && (!currentExperiment ? <section className="mx-auto max-w-3xl border-2 border-foreground bg-card p-6 sm:p-10">
             <div className="inline-flex items-center gap-2 bg-accent px-3 py-2 text-xs font-bold uppercase tracking-wider"><FlaskConical size={14} aria-hidden="true" /> Your workspace</div>
-            <h1 className="mt-6 max-w-xl text-3xl font-black tracking-tight sm:text-4xl">Turn a question into a model you can inspect.</h1>
-            <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">Create an experiment with a queueing, inventory, or Monte Carlo model. Inspect the flow, charts, assumptions, and summaries, then compare scenarios.</p>
-            <button type="button" onClick={() => setShowNew(true)} className="mt-7 flex min-h-12 items-center gap-2 border border-foreground bg-primary px-5 text-sm font-extrabold text-primary-foreground hover:brightness-95"><Plus size={17} aria-hidden="true" />Create your first experiment</button>
-            <div className="mt-9 grid gap-3 sm:grid-cols-3"><div className="border border-border p-4"><span className="font-mono text-xs text-muted-foreground">01</span><p className="mt-2 font-bold">Define</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Record the question and assumptions.</p></div><div className="border border-border p-4"><span className="font-mono text-xs text-muted-foreground">02</span><p className="mt-2 font-bold">Run</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Launch a reproducible simulation.</p></div><div className="border border-border p-4"><span className="font-mono text-xs text-muted-foreground">03</span><p className="mt-2 font-bold">Compare</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Inspect changes across scenarios.</p></div></div>
+            <h1 className="mt-6 max-w-xl text-3xl font-black tracking-tight sm:text-4xl">Explore your idea before you have all the answers.</h1>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">Describe what you want to build. Sandbox will ask about the people you want to serve and where, research the market with citations, then help you decide whether the available evidence supports a simulation.</p>
+            <button type="button" onClick={startNewExploration} className="mt-7 flex min-h-12 items-center gap-2 border border-foreground bg-primary px-5 text-sm font-extrabold text-primary-foreground hover:brightness-95"><Plus size={17} aria-hidden="true" />Explore an idea</button>
+            <div className="mt-9 grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-border p-4"><span className="font-mono text-xs text-muted-foreground">01</span><p className="mt-2 font-bold">Describe</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Start with the idea in everyday language.</p></div><div className="rounded-2xl border border-border p-4"><span className="font-mono text-xs text-muted-foreground">02</span><p className="mt-2 font-bold">Research</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Clarify audience and geography, then inspect sources and assumptions.</p></div><div className="rounded-2xl border border-border p-4"><span className="font-mono text-xs text-muted-foreground">03</span><p className="mt-2 font-bold">Model when ready</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Run a simulation once usable inputs have evidence behind them.</p></div></div>
           </section> : <div className="rise space-y-7">
-            <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><div className="flex flex-wrap items-center gap-2"><span className="border border-border bg-card px-2 py-1 text-xs font-bold uppercase tracking-wider">{currentExperiment.domain.replaceAll("_", " ")}</span><span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="size-2 rounded-full bg-secondary" /> Version {currentExperiment.version}</span></div><h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">{currentExperiment.title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{currentExperiment.objective || "No objective added."}</p></div><div className="flex flex-wrap items-end gap-3"><div className="space-y-1"><label htmlFor="run-seed" className="text-xs font-semibold">Seed (optional)</label><input id="run-seed" type="text" inputMode="numeric" pattern="[0-9]+" value={runSeed} onChange={(event) => setRunSeed(event.target.value)} placeholder="Random" className="h-11 w-28 border border-border bg-card px-3 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /></div><button type="button" disabled={!activeScenario || busy} onClick={() => activeScenario && void startRun(activeScenario)} className="flex min-h-11 shrink-0 items-center justify-center gap-2 border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground disabled:opacity-50"><Play size={16} aria-hidden="true" />Run scenario</button></div></div>
+            <div className="flex min-w-0 flex-col justify-between gap-5 sm:flex-row sm:items-end"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="max-w-full break-words rounded-full border border-border bg-card px-3 py-1 text-xs font-bold uppercase tracking-wider">{currentExperiment.domain.replaceAll("_", " ")}</span><span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="size-2 rounded-full bg-secondary" /> Version {currentExperiment.version}</span></div><h1 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-4xl">{currentExperiment.title}</h1><p className="mt-2 max-w-2xl break-words text-sm leading-6 text-muted-foreground">{currentExperiment.objective || "No objective added."}</p></div>{simulation && <div className="flex flex-wrap items-end gap-3"><div className="space-y-1"><label htmlFor="run-seed" className="text-xs font-semibold">Seed (optional)</label><input id="run-seed" type="text" inputMode="numeric" pattern="[0-9]+" value={runSeed} onChange={(event) => setRunSeed(event.target.value)} placeholder="Random" className="h-11 w-28 border border-border bg-card px-3 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /></div><button type="button" disabled={!activeScenario || busy} onClick={() => activeScenario && void startRun(activeScenario)} className="flex min-h-11 shrink-0 items-center justify-center gap-2 border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground disabled:opacity-50"><Play size={16} aria-hidden="true" />Run scenario</button></div>}</div>
+            {!simulation && <section className="glass-question"><div className="flex items-start gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-full bg-accent"><Sparkles size={18} aria-hidden="true" /></span><div className="min-w-0"><h2 className="font-extrabold">Discovery saved</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">This exploration contains your idea, founder answers, and market research. Sandbox did not have evidence-backed inputs for a responsible simulation, so it did not create a run or present market estimates as simulation results.</p></div></div></section>}
+            {simulation && <>
             <section aria-label="Experiment overview" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{(currentEngine === "queueing" ? [["Arrivals / hour", config.arrival_rate_per_hour, "Configured assumption"], ["Service rate", config.service_rate_per_hour_per_server, "Per server, per hour"], ["Servers", config.servers, "Parallel capacity"], ["Duration", `${config.duration_hours ?? "—"} h`, "Simulation window"]] : currentEngine === "inventory" ? [["Demand / day", config.average_daily_demand, "Average assumption"], ["Reorder point", config.reorder_point, "Inventory threshold"], ["Order quantity", config.order_quantity, "Units per order"], ["Duration", `${config.duration_days ?? "—"} days`, "Simulation window"]] : [["Trials", config.trials, "Repeated scenarios"], ["Periods", config.periods, "Per trial"], ["Demand likely", config.demand_mode, "Units per period"], ["Fixed cost", config.fixed_cost_per_period, "Per period"]]).map(([label, value, note]) => <MetricCard key={String(label)} label={String(label)} value={String(value ?? "—")} note={String(note)} />)}</section>
 
             <div className="grid gap-7 xl:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)]">
@@ -706,8 +834,9 @@ export default function Home() {
                     <RunVisualizations engine={currentEngine} metrics={selectedScenarioRun.metrics || {}} />
                     {Object.entries(selectedScenarioRun.metrics || {}).filter(([name, value]) => name !== "assumptions" && name !== "series" && name !== "histogram" && typeof value !== "object").map(([name, value]) => <div key={name} className="flex items-baseline justify-between gap-4 border-b border-border pb-3"><span className="text-sm text-muted-foreground">{metricLabels[name] || name.replaceAll("_", " ")}</span><span className="font-mono text-sm font-bold tabular-nums">{formatMetric(name, value)}</span></div>)}
                     <p className="text-xs leading-5 text-muted-foreground">Seed {selectedScenarioRun.seed}. Outputs are generated by the {currentEngine.replaceAll("_", " ")} model.</p>
-                    <button type="button" disabled={busy} onClick={() => void interpretRun(selectedScenarioRun)} className="flex min-h-10 w-full items-center justify-center gap-2 border border-border px-3 text-sm font-bold hover:bg-muted disabled:opacity-50"><Sparkles size={15} aria-hidden="true" />Explain these outputs with AI</button>
-                    {runExplanation?.runId === selectedScenarioRun.id && <div className="border border-border bg-muted p-4 text-sm"><p className="font-bold">AI commentary</p><p className="mt-2 leading-6">{runExplanation.result.summary}</p>{runExplanation.result.findings.length > 0 && <><p className="mt-3 text-xs font-bold uppercase tracking-wider">Findings</p><ul className="mt-1 list-disc space-y-1 pl-5">{runExplanation.result.findings.map((item) => <li key={item}>{item}</li>)}</ul></>}{runExplanation.result.limitations.length > 0 && <><p className="mt-3 text-xs font-bold uppercase tracking-wider">Limitations</p><ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{runExplanation.result.limitations.map((item) => <li key={item}>{item}</li>)}</ul></>}{runExplanation.result.follow_up_questions.length > 0 && <><p className="mt-3 text-xs font-bold uppercase tracking-wider">Questions to explore</p><ul className="mt-1 list-disc space-y-1 pl-5">{runExplanation.result.follow_up_questions.map((item) => <li key={item}>{item}</li>)}</ul></>}<p className="mt-3 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">{runExplanation.result.interpretation_notice}</p></div>}
+                    {!runExplanation || runExplanation.runId !== selectedScenarioRun.id ? <div className="space-y-2 border border-border bg-muted p-3 text-sm"><p className="font-semibold">Preparing the balanced review…</p><p className="text-xs leading-5 text-muted-foreground">Sandbox is separating model-supported upside and downside from evidence it does not have.</p><button type="button" disabled={busy} onClick={() => void interpretRun(selectedScenarioRun)} className="min-h-10 border border-border bg-card px-3 text-xs font-bold hover:bg-background disabled:opacity-50">Retry review</button></div> : <button type="button" disabled={busy} onClick={() => void interpretRun(selectedScenarioRun)} className="flex min-h-10 w-full items-center justify-center gap-2 border border-border px-3 text-sm font-bold hover:bg-muted disabled:opacity-50"><Sparkles size={15} aria-hidden="true" />Refresh balanced review</button>}
+                    {runExplanation?.runId === selectedScenarioRun.id && <div className="space-y-4 border border-border bg-muted p-4 text-sm"><div><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Balanced readout</p><p className="mt-2 leading-6">{runExplanation.result.summary}</p></div><div className="grid gap-3 sm:grid-cols-2"><div className="border border-success/50 bg-card p-3"><p className="font-bold text-success">What looks promising</p><ul className="mt-2 list-disc space-y-1 pl-5">{runExplanation.result.upside.map((item) => <li key={item}>{item}</li>)}</ul></div><div className="border border-warning bg-card p-3"><p className="font-bold">Risks and downside</p><ul className="mt-2 list-disc space-y-1 pl-5">{runExplanation.result.downside.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="border border-border bg-card p-3"><p className="font-bold">Costs and competition</p><ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{runExplanation.result.cost_and_competition.map((item) => <li key={item}>{item}</li>)}</ul></div>{runExplanation.result.findings.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">What the run shows</p><ul className="mt-1 list-disc space-y-1 pl-5">{runExplanation.result.findings.map((item) => <li key={item}>{item}</li>)}</ul></div>}{runExplanation.result.evidence_sources.length > 0 && <div className="border border-border bg-card p-3"><p className="font-bold">Sources reviewed as context</p><ul className="mt-2 space-y-2">{runExplanation.result.evidence_sources.map((source, index) => <li key={`${source.name}-${index}`} className="text-xs leading-5"><span className="font-semibold">{source.name}</span><span className="text-muted-foreground"> · {[source.provider, source.reference_area, source.period, source.license].filter(Boolean).join(" · ")}</span>{source.source_url && <> · <a className="underline underline-offset-2" href={source.source_url} target="_blank" rel="noreferrer">Source</a></>}</li>)}</ul><p className="mt-2 text-xs text-muted-foreground">These sources provide context; they did not calibrate or change the simulation.</p></div>}{runExplanation.result.evidence_gaps.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Evidence still needed</p><ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{runExplanation.result.evidence_gaps.map((item) => <li key={item}>{item}</li>)}</ul></div>}{runExplanation.result.limitations.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Model limits</p><ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{runExplanation.result.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>}{runExplanation.result.follow_up_questions.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Next questions</p><ul className="mt-1 list-disc space-y-1 pl-5">{runExplanation.result.follow_up_questions.map((item) => <li key={item}>{item}</li>)}</ul></div>}<p className="border-t border-border pt-3 text-xs leading-5 text-muted-foreground">{runExplanation.result.interpretation_notice}</p></div>}
+                    {runExplanation?.runId === selectedScenarioRun.id && <div className="border-2 border-foreground bg-accent p-4"><p className="text-xs font-bold uppercase tracking-wider">Suggested next step</p><p className="mt-2 text-sm leading-6">{runExplanation.result.recommendation}</p></div>}
                     {Array.isArray(selectedScenarioRun.metrics?.assumptions) && <details className="border border-border p-3"><summary className="cursor-pointer text-sm font-semibold">Model assumptions</summary><ul className="mt-3 list-disc space-y-2 pl-5 text-xs leading-5 text-muted-foreground">{(selectedScenarioRun.metrics.assumptions as unknown as string[]).map((assumption) => <li key={assumption}>{assumption}</li>)}</ul></details>}
                     <div className="grid grid-cols-3 gap-2" id="reports"><button type="button" disabled={busy} onClick={() => void downloadReport(selectedScenarioRun, "pdf")} className="min-h-10 border border-border text-xs font-bold hover:bg-muted">PDF</button><button type="button" disabled={busy} onClick={() => void downloadReport(selectedScenarioRun, "csv")} className="min-h-10 border border-border text-xs font-bold hover:bg-muted">CSV</button><button type="button" disabled={busy} onClick={() => void downloadReport(selectedScenarioRun, "json")} className="min-h-10 border border-border text-xs font-bold hover:bg-muted">JSON</button></div>
                   </div> : <div className="p-5"><div className="grid size-10 place-items-center bg-muted"><Clock3 size={18} aria-hidden="true" /></div><p className="mt-3 font-bold">{runs.find((run) => run.scenario_id === activeScenario?.id) ? "Run in progress" : "No completed run yet"}</p><p className="mt-1 text-sm leading-5 text-muted-foreground">Start this scenario to see modelled metrics and export a report.</p>{runs.filter((run) => run.scenario_id === activeScenario?.id).map((run) => <div key={run.id} className="mt-4 flex items-center justify-between border border-border p-3 text-xs"><span className="font-mono">{run.id.slice(0, 8)} · seed {run.seed}</span><span className="font-bold">{statusCopy[run.status] || run.status}{run.status === "running" && ` ${run.progress}%`}</span></div>)}</div>}
@@ -721,6 +850,7 @@ export default function Home() {
                 </section>
               </aside>
             </div>
+            </>}
             <section id="environment" className="border border-border bg-card">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Environment library</p><h2 className="mt-1 text-lg font-extrabold">Sources & context</h2></div><button type="button" onClick={() => setNewEnvironmentOpen((open) => !open)} className="flex min-h-10 items-center gap-2 border border-border px-3 text-sm font-bold hover:bg-muted"><Plus size={15} aria-hidden="true" />New environment</button></div>
               {newEnvironmentOpen && <form onSubmit={createEnvironment} className="grid gap-3 border-b border-border bg-muted p-4 sm:grid-cols-2 xl:grid-cols-3 sm:items-end"><Field id="environment-name" label="Environment name" required value={environmentName} onChange={(event) => setEnvironmentName(event.target.value)} placeholder="e.g. Lagos service desk" /><div className="space-y-1.5"><label htmlFor="environment-type" className="text-sm font-semibold">Environment type</label><select id="environment-type" value={environmentType} onChange={(event) => setEnvironmentType(event.target.value as Environment["environment_type"])} className="h-11 w-full border border-border bg-card px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring"><option value="synthetic">Synthetic assumptions</option><option value="real_world">Real-world context</option></select></div><Field id="environment-country" label="Country" autoComplete="country-name" value={environmentCountry} onChange={(event) => setEnvironmentCountry(event.target.value)} placeholder="e.g. Nigeria" /><Field id="environment-city" label="City / area" autoComplete="address-level2" value={environmentCity} onChange={(event) => setEnvironmentCity(event.target.value)} placeholder="e.g. Lagos" /><div className="space-y-2"><p className="text-sm font-semibold">Coordinates <span className="font-normal text-muted-foreground">(optional)</span></p><button type="button" onClick={locateEnvironment} className="min-h-11 w-full border border-border bg-card px-3 text-sm font-bold hover:bg-background">{environmentCoordinates.latitude === null ? "Use current location" : `${environmentCoordinates.latitude}, ${environmentCoordinates.longitude}`}</button></div><div className="flex items-end"><button type="submit" disabled={busy} className="min-h-11 w-full border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground">Save environment</button></div><p className="text-xs leading-5 text-muted-foreground sm:col-span-2 xl:col-span-3">Location is optional. Current location is only requested after you choose the button, and it is stored as environment metadata. No map data is imported automatically.</p></form>}
@@ -735,7 +865,7 @@ export default function Home() {
             </section>
             <section className="flex flex-col justify-between gap-3 border border-border bg-muted p-5 sm:flex-row sm:items-center"><div className="flex items-start gap-3"><Database size={18} className="mt-0.5" aria-hidden="true" /><div><p className="font-bold">Model notes</p><p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">Queueing models exponential arrivals and service across parallel servers. Inventory models daily demand and fixed lead-time replenishment. Monte Carlo samples user-provided ranges across repeated trials. None currently consumes live business feeds, calibrated maps, staffing calendars, or seasonality. AI-generated content is a draft and never determines run results.</p></div></div><span className="grid size-10 shrink-0 place-items-center border border-border bg-card" title="Model details"><CircleHelp size={16} aria-hidden="true" /></span></section>
             {latestRun?.status === "failed" && latestRun.error && <p role="alert" className="border border-destructive p-4 text-sm">Run failed: {latestRun.error}</p>}
-          </div>}
+          </div>)}
         </div>
       </section>
     </div>

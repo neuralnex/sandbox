@@ -264,7 +264,7 @@ class ReportRead(BaseModel):
 
 
 class IdeaInterpretInput(BaseModel):
-    idea: str = Field(min_length=20, max_length=12000)
+    idea: str = Field(min_length=20, max_length=32000)
 
 
 class VariableSuggestion(BaseModel):
@@ -277,13 +277,64 @@ class VariableSuggestion(BaseModel):
     rationale: str
 
 
-class QueueingDraftConfig(BaseModel):
+class SimulationDraftConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     arrival_rate_per_hour: float | None
     service_rate_per_hour_per_server: float | None
     servers: int | None
     duration_hours: float | None
+    average_daily_demand: float | None
+    demand_std_dev: float | None
+    reorder_point: int | None
+    order_quantity: int | None
+    lead_time_days: int | None
+    initial_inventory: int | None
+    duration_days: int | None
+    unit_price: float | None
+    unit_cost: float | None
+    holding_cost_per_unit_day: float | None
+    stockout_cost_per_unit: float | None
+    trials: int | None
+    periods: int | None
+    demand_min: float | None
+    demand_mode: float | None
+    demand_max: float | None
+    revenue_per_unit_min: float | None
+    revenue_per_unit_mode: float | None
+    revenue_per_unit_max: float | None
+    variable_cost_per_unit_min: float | None
+    variable_cost_per_unit_mode: float | None
+    variable_cost_per_unit_max: float | None
+    fixed_cost_per_period: float | None
+    starting_cash: float | None
+
+
+class MarketResearchSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    url: str
+    publisher: str | None
+    published_at: str | None
+    supports: str
+
+
+class MarketResearchBrief(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ready", "needs_clarification", "not_researchable"]
+    market_definition: str
+    target_customer: str | None
+    geography: str | None
+    tam_low_usd: float | None
+    tam_high_usd: float | None
+    sam_low_usd: float | None
+    sam_high_usd: float | None
+    method: str
+    assumptions: list[str]
+    caveats: list[str]
+    sources: list[MarketResearchSource]
 
 
 class ExperimentInterpretation(BaseModel):
@@ -296,17 +347,36 @@ class ExperimentInterpretation(BaseModel):
     variables: list[VariableSuggestion]
     missing_information: list[str]
     suggested_engine: str
-    simulation_config: QueueingDraftConfig
+    simulation_config: SimulationDraftConfig
     configuration_valid: bool
     configuration_errors: list[str]
+    market_research: MarketResearchBrief
     interpretation_notice: str
 
 
-class RunInterpretation(BaseModel):
+class EvidenceSourceReference(BaseModel):
+    name: str
+    source_url: str | None
+    license: str | None
+    provider: str | None
+    reference_area: str | None
+    period: str | None
+
+
+class RunInterpretationDraft(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     summary: str
+    recommendation: str
+    upside: list[str]
+    downside: list[str]
+    cost_and_competition: list[str]
+    evidence_gaps: list[str]
     findings: list[str]
     limitations: list[str]
     follow_up_questions: list[str]
     interpretation_notice: str
+
+
+class RunInterpretation(RunInterpretationDraft):
+    evidence_sources: list[EvidenceSourceReference] = Field(default_factory=list)

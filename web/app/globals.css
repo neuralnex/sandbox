@@ -60,7 +60,7 @@
 
 * { box-sizing: border-box; }
 html { min-height: 100%; background: var(--background); }
-body { margin: 0; background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
+body { margin: 0; max-width: 100%; overflow-x: hidden; background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
 button, input, textarea, select { font: inherit; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 ::selection { background: #b9d5c4; color: #173324; }
@@ -68,4 +68,87 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (prefers-reduced-motion: no-preference) {
   .rise { animation: rise-in 240ms ease-out both; }
   @keyframes rise-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+}
+
+/* Liquid-glass surfaces are reserved for the guided exploration flow so the
+   existing Sandbox palette remains the visual anchor. */
+.glass-panel {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 1.75rem;
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  box-shadow: 0 24px 70px color-mix(in srgb, var(--foreground) 10%, transparent), inset 0 1px 0 color-mix(in srgb, white 65%, transparent);
+  backdrop-filter: blur(28px) saturate(155%);
+  -webkit-backdrop-filter: blur(28px) saturate(155%);
+}
+.glass-question {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  border-radius: 1.5rem;
+  padding: clamp(1.25rem, 4vw, 2rem);
+  background: color-mix(in srgb, var(--background) 68%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 58%, transparent), 0 12px 36px color-mix(in srgb, var(--foreground) 6%, transparent);
+  backdrop-filter: blur(20px) saturate(145%);
+  -webkit-backdrop-filter: blur(20px) saturate(145%);
+}
+.glass-panel button { border-radius: 999px; }
+.glass-panel input, .glass-panel select, .glass-panel textarea { border-radius: 1rem; }
+.glass-panel summary { border-radius: 999px; }
+.glass-panel a, .glass-panel p, .glass-panel li { overflow-wrap: anywhere; }
+.question-slide-in { min-width: 0; }
+.glass-control {
+  min-height: 3.25rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 17%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--card) 76%, transparent);
+  outline: none;
+  transition: border-color 100ms ease-out, box-shadow 100ms ease-out;
+}
+.glass-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 24%, transparent);
+}
+.glass-icon, .glass-button, .glass-primary {
+  border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-radius: 999px;
+  backdrop-filter: blur(16px) saturate(145%);
+  -webkit-backdrop-filter: blur(16px) saturate(145%);
+  transition: transform 100ms ease-out, background-color 100ms ease-out, box-shadow 100ms ease-out;
+}
+.glass-icon, .glass-button { background: color-mix(in srgb, var(--card) 68%, transparent); }
+.glass-primary {
+  border-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+  background: color-mix(in srgb, var(--primary) 86%, transparent);
+  color: var(--primary-foreground);
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--primary) 24%, transparent), inset 0 1px 0 color-mix(in srgb, white 55%, transparent);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .glass-icon:hover, .glass-button:hover, .glass-primary:hover { transform: translateY(-1px); }
+  .glass-button:hover { background: color-mix(in srgb, var(--card) 90%, transparent); }
+  .glass-primary:hover { box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 34%, transparent), inset 0 1px 0 color-mix(in srgb, white 55%, transparent); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .question-slide-in-next { animation: question-in-next 360ms cubic-bezier(.2,.75,.25,1) both; }
+  .question-slide-in-previous { animation: question-in-previous 360ms cubic-bezier(.2,.75,.25,1) both; }
+  @keyframes question-in-next {
+    from { opacity: 0; transform: translate3d(18px, 5px, 0) scale(.99); filter: blur(3px); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0); }
+  }
+  @keyframes question-in-previous {
+    from { opacity: 0; transform: translate3d(-18px, 5px, 0) scale(.99); filter: blur(3px); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0); }
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass-panel, .glass-question, .glass-control, .glass-icon, .glass-button, .glass-primary {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .glass-panel { background: var(--card); }
+  .glass-question, .glass-control, .glass-icon, .glass-button { background: var(--background); }
+  .glass-primary { background: var(--primary); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glass-control, .glass-icon, .glass-button, .glass-primary { transition: none; }
 }
