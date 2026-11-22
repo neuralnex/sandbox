@@ -80,9 +80,20 @@ def _create_profile(
     workspace_name: str | None,
 ) -> User:
     username = username.lower()
+    # A Firebase auth-state callback and the sign-in handler can attempt this
+    # together. Reuse the winning profile if it has already been inserted.
+    existing = db.scalar(select(User).where(User.firebase_uid == firebase_uid))
+    if existing is not None:
+        return existing
     if db.scalar(select(User.id).where(User.username == username)) is not None:
+        existing = db.scalar(select(User).where(User.firebase_uid == firebase_uid))
+        if existing is not None:
+            return existing
         raise HTTPException(status_code=409, detail="This username is already taken")
     if email and db.scalar(select(User.id).where(User.email == email.lower())) is not None:
+        existing = db.scalar(select(User).where(User.firebase_uid == firebase_uid))
+        if existing is not None:
+            return existing
         raise HTTPException(
             status_code=409,
             detail="This email is already linked to a Sandbox profile; sign in with that provider",

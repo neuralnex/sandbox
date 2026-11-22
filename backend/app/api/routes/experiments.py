@@ -20,8 +20,30 @@ from backend.app.db.models import (
     Scenario,
     ScenarioVersion,
 )
+from backend.app.simulation.engines import ENGINE_REGISTRY
 
 router = APIRouter(prefix="/experiments", tags=["experiments"])
+
+
+def _validated_specification(specification: dict) -> dict:
+    """Reject invalid model settings when an experiment is saved, not at run time."""
+    simulation = specification.get("simulation")
+    if simulation is None:
+        return specification
+    if not isinstance(simulation, dict):
+        raise HTTPException(status_code=422, detail="Simulation configuration must be an object")
+    engine_name = simulation.get("engine")
+    engine = ENGINE_REGISTRY.get(engine_name)
+    if engine is None:
+        raise HTTPException(status_code=422, detail=f"Unsupported simulation engine: {engine_name}")
+    config = simulation.get("config")
+    if not isinstance(config, dict):
+        raise HTTPException(status_code=422, detail="Simulation config must be an object")
+    try:
+        normalized_config = engine.validate(config)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {**specification, "simulation": {**simulation, "config": normalized_config}}
 
 
 def _snapshot(experiment: Experiment) -> dict:
@@ -65,7 +87,7 @@ def create_experiment(payload: ExperimentCreate, user: CurrentUser, db: DbSessio
         description=payload.description,
         objective=payload.objective,
         domain=payload.domain,
-        specification=payload.specification,
+        specification=_validated_specification(payload.specification),
         version=1,
     )
     if payload.environment_id is not None:
@@ -144,6 +166,8 @@ def update_experiment(
         return experiment
     if any(value is None for value in updates.values()):
         raise HTTPException(status_code=422, detail="Experiment fields cannot be null")
+    if "specification" in updates:
+        updates["specification"] = _validated_specification(updates["specification"])
     for field, value in updates.items():
         if field == "environment_id" and value is not None:
             project = db.get(Project, experiment.project_id)

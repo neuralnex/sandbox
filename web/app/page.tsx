@@ -10,7 +10,7 @@ import {
   createUserWithEmailAndPassword, getIdToken, onAuthStateChanged,
   signInWithPopup, signOut,
 } from "firebase/auth";
-import { type FormEvent, type InputHTMLAttributes, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type InputHTMLAttributes, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, API_URL, ApiSession, Dataset, Environment, Experiment, Interpretation, jsonBody, Organization, Project, Run, RunInterpretation, Scenario, User } from "@/lib/api";
 import { getFirebaseAuth } from "@/lib/firebase";
 import { RunVisualizations } from "@/components/run-visualizations";
@@ -18,6 +18,7 @@ import { Data360Explorer } from "@/components/data360-explorer";
 
 const SESSION_KEY = "sandbox.api-session";
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
+const profileSyncs = new Map<string, Promise<User>>();
 const statusCopy: Record<string, string> = {
   queued: "Queued", running: "Running", cancel_requested: "Stopping",
   completed: "Complete", failed: "Failed", cancelled: "Cancelled",
@@ -40,6 +41,17 @@ const starterPrompts = [
 
 function explainError(error: unknown) {
   return error instanceof Error ? error.message : "Something went wrong. Try again.";
+}
+
+function syncFirebaseProfile(token: string, uid: string, payload: Record<string, string> = {}) {
+  const pending = profileSyncs.get(uid);
+  if (pending) return pending;
+  const request = api<User>("/auth/sync", token, jsonBody(payload));
+  profileSyncs.set(uid, request);
+  void request.finally(() => {
+    if (profileSyncs.get(uid) === request) profileSyncs.delete(uid);
+  }).catch(() => {});
+  return request;
 }
 
 function formatMetric(name: string, value: unknown) {
@@ -91,11 +103,9 @@ function AuthScreen({ onReady }: { onReady: (token: string) => Promise<void> }) 
         const auth = getFirebaseAuth();
         const credential = await createUserWithEmailAndPassword(auth, email, password);
         const token = await getIdToken(credential.user);
-        await fetch(`${API_URL}/auth/sync`, {
-          method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ username, workspace_name: workspace || undefined }),
-        }).then(async (response) => {
-          if (!response.ok) { const body = await response.json().catch(() => null); throw new Error(body?.detail || "Could not create your Sandbox profile."); }
+        await syncFirebaseProfile(token, credential.user.uid, {
+          username,
+          ...(workspace.trim() ? { workspace_name: workspace.trim() } : {}),
         });
         await onReady(token);
       } else {
@@ -121,15 +131,7 @@ function AuthScreen({ onReady }: { onReady: (token: string) => Promise<void> }) 
       const authProvider = provider === "google" ? new GoogleAuthProvider() : new GithubAuthProvider();
       const credential = await signInWithPopup(auth, authProvider);
       const token = await getIdToken(credential.user);
-      const response = await fetch(`${API_URL}/auth/sync`, {
-        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(username ? { username } : {}),
-      });
-      const body = await response.json().catch(() => null);
-      if (!response.ok) {
-        if (response.status === 422 && !username) throw new Error("Add a username in the field above, then try again to finish your profile.");
-        throw new Error(body?.detail || "Could not connect this sign-in to Sandbox.");
-      }
+      await syncFirebaseProfile(token, credential.user.uid, username ? { username } : {});
       await onReady(token);
     } catch (cause) { setError(explainError(cause)); }
     finally { setBusy(false); }
@@ -189,6 +191,7 @@ function AuthScreen({ onReady }: { onReady: (token: string) => Promise<void> }) 
 
 export default function Home() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const firebaseUid = useRef<string | null>(null);
   const [session, setSession] = useState<ApiSession | null>(null);
   const [token, setToken] = useState("");
   const [user, setUser] = useState<User | null>(null);
@@ -228,6 +231,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [drafting, setDrafting] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showBranch, setShowBranch] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -262,7 +266,19 @@ export default function Home() {
     }
     try {
       const auth = getFirebaseAuth();
-      return onAuthStateChanged(auth, (nextUser) => setFirebaseUser(nextUser));
+      return onAuthStateChanged(auth, (nextUser) => {
+        const previousUid = firebaseUid.current;
+        firebaseUid.current = nextUser?.uid || null;
+        setFirebaseUser(nextUser);
+        const hasRestSession = Boolean(sessionStorage.getItem(SESSION_KEY));
+        if ((previousUid && previousUid !== nextUser?.uid) || (nextUser && hasRestSession)) {
+          sessionStorage.removeItem(SESSION_KEY);
+          setSession(null); setToken(""); setUser(null); setOrg(null); setProjects([]);
+          setExperiments([]); setEnvironments([]); setScenarios([]); setRuns([]);
+          setSelectedScenario(""); setSelectedRuns([]); setComparison(null); setRunExplanation(null);
+          setActiveId(""); setLoading(true); setError("");
+        }
+      });
     } catch { setLoading(false); }
   }, []);
 
@@ -325,7 +341,7 @@ export default function Home() {
       if (firebaseUser) {
         try {
           const accessToken = await getIdToken(firebaseUser);
-          await api<User>("/auth/sync", accessToken, jsonBody({}));
+          await syncFirebaseProfile(accessToken, firebaseUser.uid);
           if (!cancelled) { setToken(accessToken); await loadWorkspace(accessToken); }
         } catch { if (!cancelled) setLoading(false); }
       } else if (session) {
@@ -404,7 +420,7 @@ export default function Home() {
   async function draftWithAi() {
     if (engine !== "queueing") { setError("AI configuration drafts currently support the queueing model. Choose Queueing or enter assumptions directly."); return; }
     if (idea.trim().length < 20) { setError("Add a little more detail before asking AI for an experiment draft."); return; }
-    setBusy(true); setError("");
+    setDrafting(true); setError("");
     try {
       const businessContext = org ? `\n\nWorkspace context (user-provided): business type: ${org.business_type}; location: ${[org.city, org.region, org.country].filter(Boolean).join(", ") || "not provided"}; time zone: ${org.timezone || "not provided"}. Use this only to interpret terminology and questions; do not infer demand or operating facts from location.` : "";
       const draft = await api<Interpretation>("/ai/interpret", getToken, jsonBody({ idea: `${idea.trim()}${businessContext}` }));
@@ -413,7 +429,7 @@ export default function Home() {
       setServers(String(draft.simulation_config.servers ?? "")); setDuration(String(draft.simulation_config.duration_hours ?? ""));
       if (!draft.configuration_valid) setNotice("AI returned a draft with missing or unsupported configuration. Review the assumptions and fill in each required value.");
     } catch (cause) { setError(explainError(cause)); }
-    finally { setBusy(false); }
+    finally { setDrafting(false); }
   }
 
   async function startRun(scenario: Scenario) {
@@ -625,14 +641,14 @@ export default function Home() {
 
           {showNew && <section className="rise mb-8 border-2 border-foreground bg-card">
             <div className="flex items-start justify-between border-b border-border p-5 sm:p-6"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">New experiment</p><h2 className="mt-1 text-xl font-extrabold">Start with a question</h2></div><button type="button" onClick={() => setShowNew(false)} aria-label="Close new experiment form" className="grid size-10 place-items-center hover:bg-muted"><X size={18} aria-hidden="true" /></button></div>
-            <form onSubmit={createExperiment} className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1fr_1fr]" aria-busy={busy}>
+            <form onSubmit={createExperiment} className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[1fr_1fr]" aria-busy={busy || drafting}>
               <div className="space-y-4">
                 <Field id="experiment-title" label="Experiment name" required maxLength={200} placeholder="e.g. Service desk capacity" value={title} onChange={(event) => setTitle(event.target.value)} />
                 <div className="border border-border bg-muted p-4"><p className="text-sm font-bold">Start with an industry prompt</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Prompts help frame the question. They do not supply business facts or model assumptions.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><select aria-label="Industry starter prompt" value={selectedStarter} onChange={(event) => setSelectedStarter(event.target.value)} className="h-11 min-w-0 flex-1 border border-border bg-card px-3 text-sm"><option value="">Choose a starting point…</option>{starterPrompts.map((starter) => <option key={starter.label} value={starter.label}>{starter.label}</option>)}</select><button type="button" disabled={!selectedStarter} onClick={() => { const starter = starterPrompts.find((item) => item.label === selectedStarter); if (starter) { setTitle(starter.title); setIdea(starter.text); setDomain(starter.domain); setEngine(starter.engine || "queueing"); setAiDraft(null); } }} className="min-h-11 border border-border bg-card px-4 text-sm font-bold hover:bg-background disabled:opacity-50">Use prompt</button></div></div>
                 {projects.length > 0 && projectForExperiment !== "__new" ? <div className="space-y-1.5"><label htmlFor="experiment-project" className="text-sm font-semibold">Project</label><select id="experiment-project" value={projectForExperiment} onChange={(event) => setProjectForExperiment(event.target.value)} className="h-11 w-full border border-border bg-card px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring">{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}<option value="__new">Create a new project…</option></select></div> : <Field id="project-name" label="Project name" required maxLength={160} value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} hint="Experiments are grouped into projects." />}
                 <div className="space-y-1.5"><label htmlFor="experiment-environment" className="text-sm font-semibold">Environment <span className="font-normal text-muted-foreground">(optional)</span></label><select id="experiment-environment" value={environmentForExperiment} onChange={(event) => setEnvironmentForExperiment(event.target.value)} className="h-11 w-full border border-border bg-card px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring"><option value="">No environment linked</option>{environments.map((environment) => <option key={environment.id} value={environment.id}>{environment.name}</option>)}</select><p className="text-xs text-muted-foreground">Attach source and provenance records to an experiment environment.</p></div>
                 <div className="space-y-1.5"><label htmlFor="idea" className="text-sm font-semibold">What are you trying to understand?</label><textarea id="idea" required minLength={5} rows={4} value={idea} onChange={(event) => setIdea(event.target.value)} placeholder="Describe the system and the decision you want to explore." className="w-full resize-y border border-border bg-card p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><p className="text-xs text-muted-foreground">AI can help turn this into a draft. You review every assumption before saving.</p></div>
-                <button type="button" disabled={busy || engine !== "queueing" || idea.trim().length < 20} onClick={() => void draftWithAi()} title={engine !== "queueing" ? "AI drafts currently support Queueing" : undefined} className="flex min-h-11 items-center gap-2 border border-border px-4 text-sm font-bold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"><Sparkles size={16} aria-hidden="true" />{busy ? "Working…" : engine === "queueing" ? "Draft configuration with AI" : "AI draft · Queueing only"}</button>
+                <button id="draft-ai" type="button" disabled={busy || drafting || engine !== "queueing" || idea.trim().length < 20} onClick={(event) => { event.preventDefault(); event.stopPropagation(); void draftWithAi(); }} title={engine !== "queueing" ? "AI drafts currently support Queueing" : undefined} className="flex min-h-11 items-center gap-2 border border-border px-4 text-sm font-bold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"><Sparkles size={16} aria-hidden="true" />{drafting ? "Drafting…" : engine === "queueing" ? "Draft configuration with AI" : "AI draft · Queueing only"}</button>
                 {aiDraft && <div className="border border-border bg-muted p-4 text-sm"><p className="font-bold">AI draft · {aiDraft.suggested_engine}</p><p className="mt-1 text-muted-foreground">{aiDraft.interpretation_notice}</p>{aiDraft.assumptions.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5">{aiDraft.assumptions.map((item) => <li key={item}>{item}</li>)}</ul>}{aiDraft.missing_information.length > 0 && <div className="mt-3"><p className="font-semibold">Questions to resolve</p><ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{aiDraft.missing_information.map((item) => <li key={item}>{item}</li>)}</ul></div>}{aiDraft.configuration_errors.length > 0 && <p className="mt-3 font-semibold text-destructive">{aiDraft.configuration_errors.join(" ")}</p>}</div>}
               </div>
               <div className="border border-border bg-background p-4 sm:p-5">
@@ -652,7 +668,7 @@ export default function Home() {
                   {([ ["trials", "Trials", "5000"], ["periods", "Periods", "12"], ["demand_min", "Demand · low", "80"], ["demand_mode", "Demand · most likely", "120"], ["demand_max", "Demand · high", "170"], ["revenue_per_unit_min", "Price · low", "10"], ["revenue_per_unit_mode", "Price · most likely", "12"], ["revenue_per_unit_max", "Price · high", "15"], ["variable_cost_per_unit_min", "Variable cost · low", "5"], ["variable_cost_per_unit_mode", "Variable cost · most likely", "6"], ["variable_cost_per_unit_max", "Variable cost · high", "8"], ["fixed_cost_per_period", "Fixed cost / period", "500"], ["starting_cash", "Starting cash", "10000"]] as const).map(([key, label, placeholder]) => <Field key={key} id={`monte-${key}`} label={label} type="number" min="0" step="any" required placeholder={placeholder} value={monteInputs[key]} onChange={(event) => setMonteInputs((previous) => ({ ...previous, [key]: event.target.value }))} />)}
                   <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">For each range, enter low ≤ most likely ≤ high. Demand and prices are modeled as independent triangular distributions.</p>
                 </div>}
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="max-w-sm text-xs leading-5 text-muted-foreground">Modelled outputs depend on the inputs and engine assumptions. They are not forecasts.</p><button disabled={busy} type="submit" className="flex min-h-11 items-center gap-2 border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground disabled:opacity-60">{busy && <LoaderCircle size={15} className="motion-safe:animate-spin" aria-hidden="true" />}Save experiment</button></div>
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="max-w-sm text-xs leading-5 text-muted-foreground">Modelled outputs depend on the inputs and engine assumptions. They are not forecasts.</p><button disabled={busy || drafting} type="submit" className="flex min-h-11 items-center gap-2 border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground disabled:opacity-60">{busy && !drafting && <LoaderCircle size={15} className="motion-safe:animate-spin" aria-hidden="true" />}Save experiment</button></div>
               </div>
             </form>
           </section>}
