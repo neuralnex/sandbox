@@ -20,10 +20,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       network: host
+    network_mode: host
     env_file:
       - .env
-    ports:
-      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -45,6 +44,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
       network: host
+    network_mode: host
     env_file:
       - .env
     command: ["celery", "-A", "backend.app.workers.celery_app:celery_app", "worker", "--loglevel=INFO"]
@@ -58,6 +58,7 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      network: host
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
         NEXT_PUBLIC_FIREBASE_API_KEY: ${FIREBASE_WEB_API_KEY:-}
