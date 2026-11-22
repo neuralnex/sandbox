@@ -16,6 +16,7 @@ Industry starter prompts cover service operations and inventory examples in reta
 
 - Firebase email/password, Google, and GitHub authentication.
 - PostgreSQL-backed workspaces, projects, experiment revisions, environments, datasets, scenarios, runs, events, and report snapshots.
+- World Bank Data360 indicator search, filtered time-series previews, environment source records, and source details in exported reports.
 - OpenRouter-assisted experiment drafts and grounded run commentary, both schema validated and clearly labeled as AI output.
 - Scenario branching, background execution through Celery and Redis, run history, cancellation, and run comparison.
 - PDF, CSV, and JSON reports.
@@ -70,6 +71,7 @@ The API base path is `/api/v1`. The main resource routes are:
 
 - `/organizations`, `/projects`, `/experiments` — workspace and experiment setup. Workspace profiles include business type and optional city, region, country, time zone and coordinates.
 - `/environments` — environment and source-provenance records.
+- `/data-sources/data360/search` and `/data-sources/data360/data` — authenticated proxy to the public World Bank Data360 catalog and observations API.
 - `/ai/interpret` — optional OpenRouter experiment draft.
 - `/ai/runs/{id}/interpret` — optional commentary grounded in a completed run's metrics and assumptions.
 - `/experiments/{id}/scenarios`, `/scenarios/{id}/runs` — scenario branching and simulation runs.
@@ -78,4 +80,8 @@ The API base path is `/api/v1`. The main resource routes are:
 
 ## Product boundaries
 
-Environment locations are user-entered or captured only after an explicit browser location request. Firebase Authentication does not supply a business address or GPS position. Environment dataset entries currently record source metadata; they do not import or validate external data. The workspace provides conceptual 2D flow diagrams, run charts, and generated summaries for the available models. These visuals do not represent calibrated geography or a digital twin. Industry starter prompts help frame a question but do not provide business facts. The current models have bounded, simplified assumptions and do not include live demand feeds, schedules, perishability, supplier constraints, or correlated uncertainty. Treat results as outputs of the configured model, not factual forecasts.
+Environment locations are user-entered or captured only after an explicit browser location request. Firebase Authentication does not supply a business address or GPS position. Data360 series can be searched, previewed, saved with observations and attribution notes, and recorded in later report exports. Those country or sector indicators are contextual inputs only: the engines do not consume them to set queue rates, inventory policies, or financial distributions. The Data360 API is public, and terms can vary for third-party indicators; verify indicator-specific terms before redistribution. The workspace provides conceptual 2D flow diagrams, run charts, and generated summaries. There is no 3D, geospatial engine, or digital twin. Industry starter prompts help frame a question but do not provide business facts. The current models have bounded, simplified assumptions and do not include live demand feeds, schedules, perishability, supplier constraints, or correlated uncertainty. Treat results as outputs of the configured model, not factual forecasts.
+
+## Alpha scope
+
+Sandbox is suitable for a limited product alpha focused on learning whether users can define, run, compare, and explain simple operational models. The supported model families are queueing, inventory replenishment, and Monte Carlo ranges. Data360 adds discovery and source traceability for public context; it is not model calibration. Before using a model to inform real operating decisions, validate its assumptions against business-level records and domain expertise. See [deploy/README.md](deploy/README.md) for deployment setup and [World Bank Data360](https://data360.worldbank.org/en/api) for the source API documentation.

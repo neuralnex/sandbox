@@ -14,7 +14,7 @@ from sqlalchemy import select
 from backend.app.api.deps import CurrentUser, DbSession
 from backend.app.api.routes.simulations import _accessible_run
 from backend.app.api.schemas import ReportCreate, ReportRead
-from backend.app.db.models import Environment, Experiment, Report, Scenario
+from backend.app.db.models import Dataset, Environment, Experiment, Report, Scenario
 
 router = APIRouter(tags=["reports"])
 
@@ -36,6 +36,15 @@ def _render_report(snapshot: dict, output_format: str) -> tuple[bytes, str, str]
             writer.writerow(["configuration", name, value])
         for name, value in snapshot["metrics"].items():
             writer.writerow(["metrics", name, value])
+        for source in snapshot.get("data_sources", []):
+            writer.writerow(["data_source", source["name"], source.get("source_url", "")])
+            writer.writerow(["data_source", "license", source.get("license", "")])
+            for observation in source.get("observations", []):
+                writer.writerow([
+                    "data_observation",
+                    source["name"],
+                    f"{observation.get('TIME_PERIOD', '')}: {observation.get('OBS_VALUE', '')} {observation.get('UNIT_MEASURE', '')}".strip(),
+                ])
         return output.getvalue().encode("utf-8"), "text/csv; charset=utf-8", "csv"
 
     output = io.BytesIO()
@@ -66,6 +75,31 @@ def _render_report(snapshot: dict, output_format: str) -> tuple[bytes, str, str]
     story.append(Paragraph("Assumptions and limitations", styles["Heading2"]))
     for assumption in snapshot.get("assumptions", []):
         story.append(Paragraph(f"• {escape(str(assumption))}", styles["BodyText"]))
+    sources = snapshot.get("data_sources", [])
+    if sources:
+        story.extend([Spacer(1, 12), Paragraph("Data sources and provenance", styles["Heading2"])])
+        source_rows = [[Paragraph(label, styles["BodyText"]) for label in ["Source", "Indicator / dataset", "Area", "Periods"]]]
+        source_rows.extend([
+            [Paragraph(escape(str(value)), styles["BodyText"]) for value in [
+                item["name"], item.get("indicator_id") or item.get("provider") or "—",
+                item.get("reference_area") or "—", item.get("period_range") or "—",
+            ]]
+            for item in sources
+        ])
+        source_table = Table(source_rows, repeatRows=1, hAlign="LEFT")
+        source_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#172b4d")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#cbd5e1")),
+            ("PADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(source_table)
+        for item in sources:
+            if item.get("source_url"):
+                story.append(Paragraph(f"{escape(str(item['name']))}: {escape(str(item['source_url']))}", styles["BodyText"]))
+            if item.get("license"):
+                story.append(Paragraph(f"License / terms: {escape(str(item['license']))}", styles["BodyText"]))
+        story.append(Paragraph("Source records reflect the linked environment when this report was created. Context data was not used to calibrate the simulation.", styles["BodyText"]))
     story.append(Spacer(1, 12))
     story.append(
         Paragraph(f"Configuration: {escape(json.dumps(snapshot['configuration']))}", styles["Code"])
@@ -88,9 +122,32 @@ def create_report(
     scenario = db.get(Scenario, run.scenario_id)
     experiment = db.get(Experiment, scenario.experiment_id)
     environment_name = None
+    data_sources = []
     if experiment.environment_id:
         environment = db.get(Environment, experiment.environment_id)
         environment_name = environment.name if environment else None
+        for dataset in db.scalars(
+            select(Dataset).where(Dataset.environment_id == experiment.environment_id).order_by(Dataset.created_at)
+        ).all():
+            metadata = dataset.metadata_json or {}
+            data_sources.append({
+                "id": str(dataset.id),
+                "name": dataset.name,
+                "source_url": dataset.source_url,
+                "license": dataset.license,
+                "provider": metadata.get("provider"),
+                "indicator_id": metadata.get("indicator_id"),
+                "reference_area": metadata.get("reference_area"),
+                "period_range": (
+                    f"{metadata.get('period_from') or 'start'}–{metadata.get('period_to') or 'latest'}"
+                    if metadata.get("period_from") or metadata.get("period_to") else None
+                ),
+                "observation_count": len(metadata.get("observations", []))
+                if isinstance(metadata.get("observations"), list) else None,
+                "observations": metadata.get("observations", [])
+                if isinstance(metadata.get("observations"), list) else [],
+                "use_note": metadata.get("use_note"),
+            })
     snapshot = {
         "title": f"Results: {experiment.title} — {scenario.name}",
         "experiment": {
@@ -99,6 +156,7 @@ def create_report(
             "domain": experiment.domain,
             "environment": environment_name,
         },
+        "data_sources": data_sources,
         "scenario": {"name": scenario.name, "version": run.scenario_version},
         "simulation": {
             "run_id": str(run.id),

@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.routes import (
     auth,
     ai,
+    data360,
     environments,
     experiments,
     organizations,
@@ -35,6 +36,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
 app.include_router(ai.router, prefix=settings.api_v1_prefix)
+app.include_router(data360.router, prefix=settings.api_v1_prefix)
 app.include_router(users.router, prefix=settings.api_v1_prefix)
 app.include_router(organizations.router, prefix=settings.api_v1_prefix)
 app.include_router(projects.router, prefix=settings.api_v1_prefix)
