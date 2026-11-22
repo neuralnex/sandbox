@@ -1,87 +1,91 @@
 # Sandbox
 
-Sandbox is an experimentation workspace for turning questions into explicit model configurations, running reproducible scenarios, comparing outputs, and exporting reports. It keeps the AI draft separate from the simulation engine: the model executes the run and records the configuration, seed, engine version, and result.
+**Turn business questions into explicit models, repeatable simulations, and reports you can inspect.**
 
-The executable model catalog currently includes: (1) a discrete event queueing simulation using SimPy, with exponential arrivals and service times across identical parallel servers; (2) an inventory replenishment model with daily demand, reorder thresholds, fixed lead times, stockouts, and basic cost outputs; and (3) a seeded Monte Carlo business outcome model using triangular low/most-likely/high estimates for demand, price, and variable cost. Each model validates bounded inputs and records reproducible outputs. Industry templates help set the question and model type; users still enter and review the model assumptions.
+Sandbox is a workspace for exploring operational and financial scenarios. Describe what you want to understand, choose a model, review its assumptions, then run and compare outcomes. AI can help draft an experiment, but it does not run the model or decide the results.
 
-### Model setup
+<p align="center">
+  <a href="https://nextjs.org/"><img alt="Next.js" src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white"></a>
+  <a href="https://react.dev/"><img alt="React" src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB"></a>
+  <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white"></a>
+  <a href="https://tailwindcss.com/"><img alt="Tailwind_CSS" src="https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white"></a>
+  <a href="https://lucide.dev/"><img alt="Lucide" src="https://img.shields.io/badge/Lucide-111827?style=for-the-badge&logo=lucide&logoColor=white"></a>
+  <a href="https://firebase.google.com/products/auth"><img alt="Firebase_Authentication" src="https://img.shields.io/badge/Firebase_Auth-FFCA28?style=for-the-badge&logo=firebase&logoColor=black"></a>
+  <a href="https://fastapi.tiangolo.com/"><img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white"></a>
+  <a href="https://www.python.org/"><img alt="Python" src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://www.postgresql.org/"><img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white"></a>
+  <a href="https://www.sqlalchemy.org/"><img alt="SQLAlchemy" src="https://img.shields.io/badge/SQLAlchemy-D71F00?style=for-the-badge&logo=sqlalchemy&logoColor=white"></a>
+  <a href="https://alembic.sqlalchemy.org/"><img alt="Alembic" src="https://img.shields.io/badge/Alembic-6A9?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://docs.celeryq.dev/"><img alt="Celery" src="https://img.shields.io/badge/Celery-37814A?style=for-the-badge&logo=celery&logoColor=white"></a>
+  <a href="https://redis.io/"><img alt="Redis" src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white"></a>
+  <a href="https://simpy.readthedocs.io/"><img alt="SimPy" src="https://img.shields.io/badge/SimPy-4B5563?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://openrouter.ai/"><img alt="OpenRouter" src="https://img.shields.io/badge/OpenRouter-6B5CE7?style=for-the-badge&logo=openrouter&logoColor=white"></a>
+  <a href="https://data360.worldbank.org/en/api"><img alt="World_Bank_Data360" src="https://img.shields.io/badge/World_Bank_Data360-002244?style=for-the-badge&logo=worldbank&logoColor=white"></a>
+  <a href="https://www.reportlab.com/"><img alt="ReportLab" src="https://img.shields.io/badge/ReportLab-8B5CF6?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://pydantic.dev/"><img alt="Pydantic" src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white"></a>
+  <a href="https://www.uvicorn.org/"><img alt="Uvicorn" src="https://img.shields.io/badge/Uvicorn-4051B5?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://www.python-httpx.org/"><img alt="HTTPX" src="https://img.shields.io/badge/HTTPX-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://pypi.org/project/email-validator/"><img alt="Email_Validator" src="https://img.shields.io/badge/Email_Validator-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://www.psycopg.org/"><img alt="Psycopg" src="https://img.shields.io/badge/Psycopg-4169E1?style=for-the-badge&logo=postgresql&logoColor=white"></a>
+  <a href="https://nodejs.org/"><img alt="Node.js" src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white"></a>
+  <a href="https://postcss.org/"><img alt="PostCSS" src="https://img.shields.io/badge/PostCSS-DD3A0A?style=for-the-badge&logo=postcss&logoColor=white"></a>
+  <a href="https://eslint.org/"><img alt="ESLint" src="https://img.shields.io/badge/ESLint-4B32C3?style=for-the-badge&logo=eslint&logoColor=white"></a>
+  <a href="https://www.docker.com/"><img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white"></a>
+</p>
 
-- **Queueing:** arrivals per hour, service completions per server per hour, number of parallel servers, and duration in hours. The optional seed makes a run repeatable. Outputs include completions by the time horizon, unfinished work at that cutoff, average and 95th-percentile wait for all jobs that arrived before it, utilization, and an hourly series. Arrival and service times are exponential; servers are identical and continuously available. Jobs are drained after the cutoff to calculate full waiting times; post-cutoff completions remain marked unfinished at the cutoff.
-- **Inventory:** average daily demand, demand standard deviation, reorder point, order quantity, supplier lead time, starting stock, and duration in days. The form also asks for unit revenue, unit purchase cost, holding cost, and stockout cost. Outputs include fill rate, stockouts, orders, ending stock, and a basic net operating result. Demand is sampled from a normal distribution and clipped at zero; the model has no perishability or seasonality.
-- **Monte Carlo business range:** low, most-likely, and high estimates for demand, revenue per unit, and variable cost per unit, plus fixed cost per period. The form also asks for trials, periods, and starting cash. Outputs are a profit distribution, P10/median/P90, and the share of trials with positive profit. This share is conditional on the entered assumptions, not a calibrated real-world probability.
+## What you can do
 
-Industry starter prompts cover service operations and inventory examples in retail, healthcare, logistics, manufacturing, finance, education, hospitality, public services, technology, agriculture, and general business. These are prompts, not separate model types. The AI configuration draft currently supports queueing; inventory and Monte Carlo are configured directly from their input forms.
+- **Frame a question:** organize work in workspaces, projects, experiments, and versioned scenarios.
+- **Configure a model:** use explicit inputs and inspect assumptions before a run.
+- **Explore outcomes:** run seeded simulations, compare scenarios, and review charts and summaries.
+- **Keep context:** attach source records and business context to reusable environments.
+- **Share the work:** export reproducible PDF, CSV, and JSON reports with run settings and provenance.
+- **Start with AI help:** draft a queueing experiment from a description and review every assumption before saving.
 
-## Included workflow
+## Simulation models
 
-- Firebase email/password, Google, and GitHub authentication.
-- PostgreSQL-backed workspaces, projects, experiment revisions, environments, datasets, scenarios, runs, events, and report snapshots.
-- World Bank Data360 indicator search, filtered time-series previews, environment source records, and source details in exported reports.
-- OpenRouter-assisted experiment drafts and grounded run commentary, both schema validated and clearly labeled as AI output.
-- Scenario branching, background execution through Celery and Redis, run history, cancellation, and run comparison.
-- PDF, CSV, and JSON reports.
-- Responsive Next.js workspace UI with light and dark appearance, industry starter prompts, workspace business profiles, and optional location context.
+| Model | Useful for exploring | Main inputs |
+| --- | --- | --- |
+| Queueing | Waiting time, throughput, backlog, and capacity | Arrival rate, service rate per server, server count, duration |
+| Inventory replenishment | Reorder policies, stockouts, fill rate, and basic costs | Demand level and variation, reorder point, order quantity, lead time, stock and costs |
+| Monte Carlo business range | How uncertain demand, price, and costs affect a range of outcomes | Low / likely / high estimates, fixed costs, periods, trials, starting cash |
 
-## Configure Firebase
+Industry starter prompts cover areas such as retail, healthcare, logistics, manufacturing, finance, education, hospitality, public services, technology, and agriculture. They help users frame a scenario; they are not calibrated industry models.
 
-1. Create a Firebase project and web app.
-2. Enable **Email/Password**, **Google**, and **GitHub** in **Authentication → Sign-in method**.
-3. For GitHub, create an OAuth app and add Firebase's callback URL to the OAuth app configuration.
-4. Add `localhost` under **Authentication → Settings → Authorized domains** for local development.
-5. Copy `.env.example` to `.env`. Set the Firebase project ID, Web API key, auth domain, and app ID from the web app settings. Provide Firebase Admin credentials with Application Default Credentials or `FIREBASE_SERVICE_ACCOUNT_JSON`.
-6. Set `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` to enable AI drafting. This is optional; a user can configure and run an experiment without AI.
+## Data and evidence
 
-Keep service-account credentials and provider keys out of source control. Firebase's web API key is a public client configuration value; restrict it to your app's domains in Google Cloud where appropriate.
+The World Bank Data360 connection lets users search indicators, preview country and time-period observations, and save selected records with source and attribution details in an environment. Data can then be carried into report provenance.
 
-## Run with Docker
+Data360 is a **context and provenance rail** in this alpha. Its observations do not currently set simulation parameters or calibrate the engines. Check the terms for each indicator before reusing or redistributing it; licensing may vary by source.
 
-After configuring `.env`, start the full stack:
+## Who Sandbox is for
 
-```sh
-COMPOSE_BAKE=false docker compose up --build
-```
+Sandbox is being developed for teams, operators, founders, analysts, and students who need to make assumptions visible and compare possible scenarios before acting. It supports cross-industry exploration while the model catalog and data coverage grow from user feedback.
 
-`COMPOSE_BAKE=false` selects Compose's built-in builder. It avoids a Bake panic in affected Docker Compose installations. The API and worker build steps use host networking so dependency installation can use the host's DNS configuration. At runtime, the API and worker also use host networking because this Linux development setup's Docker bridge cannot reliably reach the configured external Neon and Upstash services. The API listens on port 8000 directly on the host; the web app is at `http://localhost:3000` and API documentation at `http://localhost:8000/docs`. The development API container applies Alembic migrations on startup. The local PostgreSQL and Redis services remain available for development, and their credentials are for local use only.
+## Alpha status and model limits
 
-For separate web and backend image builds, release migrations, and API/worker deployment configuration, see [deploy/README.md](deploy/README.md). The web image uses Next.js standalone output. The backend image can run as the API or as the Celery worker; production migrations are a separate one-off release command.
+Sandbox is ready for a **limited product alpha** focused on workflow usability: can people formulate a question, configure a simple model, run it, compare alternatives, and explain what they learned?
 
-## Run the web app locally
+The current engines use simplified assumptions. Queue arrivals and service times are exponential with identical continuously available servers. Inventory demand is sampled from a normal distribution and clipped at zero. Monte Carlo outcomes use triangular ranges for demand, price, and variable cost. These models do not yet account for live business records, staffing calendars, seasonality, supplier constraints, or calibrated sector behavior. Results are conditional on the inputs and engine assumptions; they are not forecasts or recommendations for operational decisions.
 
-Configure the backend `.env` as above, then copy `web/.env.example` to `web/.env.local` and add the Firebase web app settings. Start PostgreSQL, Redis, API, and worker with Docker:
+The interface includes 2D charts and scenario comparisons. It does not currently provide 3D, geospatial simulation, or a digital twin.
 
-```sh
-COMPOSE_BAKE=false docker compose up --build db redis api worker
-```
+## Product tour
 
-In another terminal:
+1. Create an experiment around a business question.
+2. Select a model and provide the values it requires.
+3. Review the assumptions and create a baseline run.
+4. Branch scenarios to compare different inputs.
+5. Attach useful context and export a report for review.
 
-```sh
-cd web
-npm ci
-npm run dev
-```
+## Get started
 
-Visit `http://localhost:3000`. The web app requires Node.js 20.9 or newer.
+For the local development setup, Firebase configuration, Docker workflow, and API overview, see [Development guide](docs/DEVELOPMENT.md). For separate web and backend deployment, see [Deployment guide](deploy/README.md).
 
-## Authentication and API
+### Sign-in providers
 
-The web client signs in through Firebase and sends Firebase ID tokens as bearer tokens. Email/password login accepts either a username or email. The API also exposes `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/refresh`, and `/api/v1/auth/sync`. `/auth/sync` creates a profile for a first-time federated sign-in (suggesting a stable handle if none is supplied) and links legacy users only when Firebase confirms a verified email, preserving their existing Sandbox handle and data.
+Firebase Authentication supports email and password, Google, and GitHub sign-in. OpenRouter-powered drafting is optional; experiments can be configured and run without AI credentials.
 
-The API base path is `/api/v1`. The main resource routes are:
+## Technology
 
-- `/organizations`, `/projects`, `/experiments` — workspace and experiment setup. Workspace profiles include business type and optional city, region, country, time zone and coordinates.
-- `/environments` — environment and source-provenance records.
-- `/data-sources/data360/search` and `/data-sources/data360/data` — authenticated proxy to the public World Bank Data360 catalog and observations API.
-- `/ai/interpret` — optional OpenRouter experiment draft.
-- `/ai/runs/{id}/interpret` — optional commentary grounded in a completed run's metrics and assumptions.
-- `/experiments/{id}/scenarios`, `/scenarios/{id}/runs` — scenario branching and simulation runs.
-- `/experiments/{id}/runs`, `/experiments/{id}/scenarios/compare` — run history and comparison.
-- `/runs/{id}/reports` — create downloadable PDF, CSV, or JSON snapshots.
-
-## Product boundaries
-
-Environment locations are user-entered or captured only after an explicit browser location request. Firebase Authentication does not supply a business address or GPS position. Data360 series can be searched, previewed, saved with observations and attribution notes, and recorded in later report exports. Those country or sector indicators are contextual inputs only: the engines do not consume them to set queue rates, inventory policies, or financial distributions. The Data360 API is public, and terms can vary for third-party indicators; verify indicator-specific terms before redistribution. The workspace provides conceptual 2D flow diagrams, run charts, and generated summaries. There is no 3D, geospatial engine, or digital twin. Industry starter prompts help frame a question but do not provide business facts. The current models have bounded, simplified assumptions and do not include live demand feeds, schedules, perishability, supplier constraints, or correlated uncertainty. Treat results as outputs of the configured model, not factual forecasts.
-
-## Alpha scope
-
-Sandbox is suitable for a limited product alpha focused on learning whether users can define, run, compare, and explain simple operational models. The supported model families are queueing, inventory replenishment, and Monte Carlo ranges. Data360 adds discovery and source traceability for public context; it is not model calibration. Before using a model to inform real operating decisions, validate its assumptions against business-level records and domain expertise. See [deploy/README.md](deploy/README.md) for deployment setup and [World Bank Data360](https://data360.worldbank.org/en/api) for the source API documentation.
+The badges above link to the project technologies and services: Next.js, React, TypeScript, Tailwind CSS, Lucide, Firebase Authentication and Admin, FastAPI, Python, Uvicorn, Pydantic, HTTPX, PostgreSQL, Psycopg, SQLAlchemy, Alembic, Celery, Redis, SimPy, Node.js, PostCSS, ESLint, OpenRouter, World Bank Data360, ReportLab, and Docker.
