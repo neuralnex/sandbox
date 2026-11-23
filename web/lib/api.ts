@@ -21,10 +21,10 @@ export type Experiment = {
 };
 export type Scenario = {
   id: string; experiment_id: string; parent_id: string | null; name: string;
-  overrides: Record<string, unknown>; context: Record<string, unknown>; is_baseline: boolean; version: number;
+  overrides: Record<string, unknown>; is_baseline: boolean; version: number;
 };
 export type Run = {
-  id: string; scenario_id: string; seed: number; config: Record<string, number>; context: Record<string, unknown>;
+  id: string; scenario_id: string; seed: number; config: Record<string, number>;
   status: "queued" | "running" | "cancel_requested" | "completed" | "failed" | "cancelled";
   progress: number; metrics: Record<string, unknown> | null; error: string | null;
   created_at: string; finished_at: string | null;
@@ -35,8 +35,6 @@ export type Data360Indicator = { series_description?: { idno?: string; name?: st
 export type Data360Observation = { OBS_VALUE?: string | null; TIME_PERIOD?: string; REF_AREA?: string; UNIT_MEASURE?: string | null; COMMENT_TS?: string | null; [key: string]: unknown };
 export type Data360SearchResponse = { "@odata.count"?: number; value?: Data360Indicator[] };
 export type Data360DataResponse = { count?: number; value?: Data360Observation[] };
-export type Data360AreaValue = { reference_area: string; observations: Data360Observation[]; error?: string };
-export type Data360Comparison = { database_id: string; indicator: string; value: Data360AreaValue[] };
 export type Interpretation = {
   title: string; objective: string; domain: string; assumptions: string[];
   variables: { name: string; description: string; value: string | number | boolean | null; unit: string | null; rationale: string }[];
@@ -54,15 +52,6 @@ export type RunInterpretation = {
   summary: string; recommendation: string; upside: string[]; downside: string[]; cost_and_competition: string[]; evidence_gaps: string[];
   findings: string[]; limitations: string[]; follow_up_questions: string[]; interpretation_notice: string;
   evidence_sources: { name: string; source_url: string | null; license: string | null; provider: string | null; reference_area: string | null; period: string | null }[];
-};
-export type WhatIfProposal = {
-  scenario_name: string;
-  answer: string;
-  can_simulate: boolean;
-  overrides: Record<string, number | string | boolean>;
-  assumptions: string[];
-  limitations: string[];
-  proposed_config: Record<string, number | string | boolean>;
 };
 
 export async function api<T>(path: string, token: string | (() => Promise<string>), init: RequestInit = {}): Promise<T> {

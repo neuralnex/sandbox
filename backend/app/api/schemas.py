@@ -133,7 +133,6 @@ class ExperimentVersionRead(BaseModel):
 class ScenarioCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     overrides: dict[str, Any] = Field(default_factory=dict)
-    context: dict[str, Any] = Field(default_factory=dict, max_length=64)
 
 
 class ScenarioBranchInput(ScenarioCreate):
@@ -144,7 +143,6 @@ class ScenarioUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, min_length=1, max_length=160)
     overrides: dict[str, Any] | None = None
-    context: dict[str, Any] | None = Field(default=None, max_length=64)
 
 
 class ScenarioRead(BaseModel):
@@ -155,7 +153,6 @@ class ScenarioRead(BaseModel):
     created_by_id: UUID
     name: str
     overrides: dict[str, Any]
-    context: dict[str, Any] = Field(default_factory=dict)
     is_baseline: bool
     version: int
     created_at: datetime
@@ -186,7 +183,6 @@ class SimulationRunRead(BaseModel):
     engine_version: str
     seed: int
     config: dict[str, Any]
-    context: dict[str, Any] = Field(default_factory=dict)
     status: str
     progress: int
     metrics: dict[str, Any] | None
@@ -269,38 +265,6 @@ class ReportRead(BaseModel):
 
 class IdeaInterpretInput(BaseModel):
     idea: str = Field(min_length=20, max_length=32000)
-
-
-class WhatIfInput(BaseModel):
-    question: str = Field(min_length=3, max_length=4000)
-
-
-class WhatIfChange(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    key: str = Field(min_length=1, max_length=100)
-    value: float | int | bool
-
-
-class WhatIfDraft(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    scenario_name: str = Field(min_length=1, max_length=160)
-    answer: str
-    can_simulate: bool
-    changes: list[WhatIfChange]
-    assumptions: list[str]
-    limitations: list[str]
-
-
-class WhatIfProposal(BaseModel):
-    scenario_name: str
-    answer: str
-    can_simulate: bool
-    overrides: dict[str, Any]
-    assumptions: list[str]
-    limitations: list[str]
-    proposed_config: dict[str, Any]
 
 
 class VariableSuggestion(BaseModel):

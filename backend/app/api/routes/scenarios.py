@@ -64,7 +64,6 @@ def create_scenario(
         created_by_id=user.id,
         name=payload.name,
         overrides=payload.overrides,
-        context=payload.context,
     )
     db.add(scenario)
     db.flush()
@@ -72,7 +71,7 @@ def create_scenario(
         ScenarioVersion(
             scenario_id=scenario.id,
             revision=1,
-            snapshot={"name": scenario.name, "overrides": scenario.overrides, "context": scenario.context},
+            snapshot={"name": scenario.name, "overrides": scenario.overrides},
             created_by_id=user.id,
         )
     )
@@ -107,15 +106,12 @@ def branch_scenario(
     db: DbSession,
 ) -> Scenario:
     parent = _accessible_scenario(db, user.id, scenario_id)
-    inherited_context = dict(parent.context or {})
-    inherited_context.update(payload.context)
     branch = Scenario(
         experiment_id=parent.experiment_id,
         parent_id=parent.id,
         created_by_id=user.id,
         name=payload.name,
         overrides=payload.overrides,
-        context=inherited_context,
     )
     db.add(branch)
     db.flush()
@@ -123,7 +119,7 @@ def branch_scenario(
         ScenarioVersion(
             scenario_id=branch.id,
             revision=1,
-            snapshot={"name": branch.name, "overrides": branch.overrides, "context": branch.context},
+            snapshot={"name": branch.name, "overrides": branch.overrides},
             created_by_id=user.id,
         )
     )
@@ -137,13 +133,13 @@ def update_scenario(
     scenario_id: UUID, payload: ScenarioUpdate, user: CurrentUser, db: DbSession
 ) -> Scenario:
     scenario = _accessible_scenario(db, user.id, scenario_id)
+    if scenario.is_baseline:
+        raise HTTPException(status_code=409, detail="The baseline scenario cannot be edited")
     updates = payload.model_dump(exclude_unset=True)
     if any(value is None for value in updates.values()):
         raise HTTPException(status_code=422, detail="Scenario fields cannot be null")
     if not updates:
         return scenario
-    if scenario.is_baseline and set(updates) - {"context"}:
-        raise HTTPException(status_code=409, detail="Baseline inputs are protected; branch it to change model assumptions")
     for field, value in updates.items():
         setattr(scenario, field, value)
     scenario.version += 1
@@ -152,33 +148,10 @@ def update_scenario(
         ScenarioVersion(
             scenario_id=scenario.id,
             revision=scenario.version,
-            snapshot={"name": scenario.name, "overrides": scenario.overrides, "context": scenario.context},
+            snapshot={"name": scenario.name, "overrides": scenario.overrides},
             created_by_id=user.id,
         )
     )
-    db.commit()
-    db.refresh(scenario)
-    return scenario
-
-
-@router.post("/scenarios/{scenario_id}/promote", response_model=ScenarioRead)
-def promote_scenario(
-    scenario_id: UUID, user: CurrentUser, db: DbSession
-) -> Scenario:
-    scenario = _accessible_scenario(db, user.id, scenario_id)
-    siblings = db.scalars(
-        select(Scenario).where(Scenario.experiment_id == scenario.experiment_id)
-    ).all()
-    for item in siblings:
-        item.is_baseline = item.id == scenario.id
-    scenario.version += 1
-    scenario.updated_at = utc_now()
-    db.add(ScenarioVersion(
-        scenario_id=scenario.id,
-        revision=scenario.version,
-        snapshot={"name": scenario.name, "overrides": scenario.overrides, "context": scenario.context, "is_baseline": True},
-        created_by_id=user.id,
-    ))
     db.commit()
     db.refresh(scenario)
     return scenario
@@ -246,7 +219,7 @@ def compare_scenario_runs(
         "experiment_id": experiment.id,
         "reference_run_id": runs[0].id,
         "runs": [
-            {"id": run.id, "scenario_id": run.scenario_id, "seed": run.seed, "config": run.config, "context": run.context or {}}
+            {"id": run.id, "scenario_id": run.scenario_id, "seed": run.seed}
             for run in runs
         ],
         "metrics": rows,
