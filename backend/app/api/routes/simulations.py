@@ -76,6 +76,21 @@ def _effective_overrides(db: DbSession, scenario: Scenario) -> dict:
     return merged
 
 
+def _effective_context(db: DbSession, scenario: Scenario) -> dict:
+    chain = [scenario]
+    parent_id = scenario.parent_id
+    while parent_id is not None:
+        parent = db.get(Scenario, parent_id)
+        if parent is None:
+            break
+        chain.append(parent)
+        parent_id = parent.parent_id
+    merged: dict = {}
+    for item in reversed(chain):
+        merged.update(item.context or {})
+    return merged
+
+
 @router.post(
     "/scenarios/{scenario_id}/runs",
     response_model=SimulationRunRead,
@@ -114,6 +129,7 @@ def start_run(
         engine_version=engine.version,
         seed=seed,
         config=config,
+        context=_effective_context(db, scenario),
         status="queued",
         progress=0,
         created_by_id=user.id,
@@ -173,6 +189,7 @@ def get_run_results(run_id: UUID, user: CurrentUser, db: DbSession) -> dict:
         "experiment_version": run.experiment_version,
         "scenario_version": run.scenario_version,
         "config": run.config,
+        "context": run.context or {},
         "metrics": run.metrics,
     }
 

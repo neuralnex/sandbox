@@ -11,10 +11,11 @@ import {
   signInWithPopup, signOut,
 } from "firebase/auth";
 import { type FormEvent, type InputHTMLAttributes, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, API_URL, ApiSession, Dataset, Environment, Experiment, Interpretation, jsonBody, Organization, Project, Run, RunInterpretation, Scenario, User } from "@/lib/api";
+import { api, API_URL, ApiSession, Dataset, Environment, Experiment, Interpretation, jsonBody, Organization, Project, Run, RunInterpretation, Scenario, User, WhatIfProposal } from "@/lib/api";
 import { getFirebaseAuth } from "@/lib/firebase";
 import { RunVisualizations } from "@/components/run-visualizations";
 import { Data360Explorer } from "@/components/data360-explorer";
+import { GeographyWorkbench } from "@/components/geography-workbench";
 import { SandboxMascot } from "@/components/sandbox-mascot";
 
 const SESSION_KEY = "sandbox.api-session";
@@ -76,6 +77,31 @@ function formatMarketRange(low: number | null, high: number | null) {
   if (low === null || high === null) return "Not estimated";
   const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 });
   return `${money.format(low)} – ${money.format(high)} / year`;
+}
+
+function effectiveScenarioConfig(baseline: Scenario | null, scenarios: Scenario[], config: Record<string, number>) {
+  if (!baseline) return config;
+  const byId = new Map(scenarios.map((item) => [item.id, item]));
+  const chain: Scenario[] = [];
+  let current: Scenario | undefined = baseline;
+  while (current) {
+    chain.push(current);
+    current = current.parent_id ? byId.get(current.parent_id) : undefined;
+  }
+  return chain.reverse().reduce<Record<string, number>>((merged, item) => {
+    for (const [key, value] of Object.entries(item.overrides)) if (typeof value === "number") merged[key] = value;
+    return merged;
+  }, { ...config });
+}
+
+function scenarioCaption(scenario: Scenario) {
+  const model = Object.entries(scenario.overrides).map(([key, value]) => `${key.replaceAll("_", " ")}: ${value}`).join(" · ");
+  const geography = scenario.context?.geography as Record<string, unknown> | undefined;
+  const whatIf = scenario.context?.what_if as Record<string, unknown> | undefined;
+  const location = typeof geography?.area_name === "string" ? `Market: ${geography.area_name}` : "";
+  const factor = typeof geography?.indicator_name === "string" ? String(geography.indicator_name) : "";
+  const question = typeof whatIf?.question === "string" ? `What if: ${whatIf.question}` : "";
+  return [model || "Uses experiment settings", location, factor, question].filter(Boolean).join(" · ");
 }
 
 function Logo({ small = false }: { small?: boolean }) {
@@ -247,8 +273,10 @@ export default function Home() {
   const [selectedRunId, setSelectedRunId] = useState("");
   const [selectedScenario, setSelectedScenario] = useState("");
   const [selectedRuns, setSelectedRuns] = useState<string[]>([]);
-  const [comparison, setComparison] = useState<{ metrics: { metric: string; values: Record<string, number | string>; delta_from_first: Record<string, number> | null }[] } | null>(null);
+  const [comparison, setComparison] = useState<{ runs: { id: string; scenario_id: string; seed: number; config: Record<string, number>; context: Record<string, unknown> }[]; metrics: { metric: string; values: Record<string, number | string>; delta_from_first: Record<string, number> | null }[] } | null>(null);
   const [runExplanation, setRunExplanation] = useState<{ runId: string; result: RunInterpretation } | null>(null);
+  const [whatIfQuestion, setWhatIfQuestion] = useState("");
+  const [whatIfProposal, setWhatIfProposal] = useState<{ runId: string; proposal: WhatIfProposal } | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -539,6 +567,84 @@ export default function Home() {
     finally { setBusy(false); }
   }
 
+  async function askWhatIf(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedScenarioRun) return;
+    setBusy(true); setError(""); setWhatIfProposal(null);
+    try {
+      const proposal = await api<WhatIfProposal>(
+        `/ai/runs/${selectedScenarioRun.id}/what-if`,
+        getToken,
+        jsonBody({ question: whatIfQuestion.trim() }),
+      );
+      setWhatIfProposal({ runId: selectedScenarioRun.id, proposal });
+    } catch (cause) { setError(explainError(cause)); }
+    finally { setBusy(false); }
+  }
+
+  async function createWhatIfScenario() {
+    if (!selectedScenarioRun || !whatIfProposal || whatIfProposal.runId !== selectedScenarioRun.id || !whatIfProposal.proposal.can_simulate || !activeId) return;
+    setBusy(true); setError("");
+    try {
+      const branched = await api<Scenario>(
+        `/scenarios/${selectedScenarioRun.scenario_id}/branch`,
+        getToken,
+        jsonBody({
+          name: whatIfProposal.proposal.scenario_name,
+          overrides: whatIfProposal.proposal.overrides,
+          context: {
+            what_if: {
+              question: whatIfQuestion.trim(),
+              answer: whatIfProposal.proposal.answer,
+              assumptions: whatIfProposal.proposal.assumptions,
+              limitations: whatIfProposal.proposal.limitations,
+              based_on_run_id: selectedScenarioRun.id,
+              parent_scenario_id: selectedScenarioRun.scenario_id,
+            },
+          },
+        }),
+      );
+      setScenarios((items) => [...items, branched]);
+      setSelectedScenario(branched.id); setSelectedRunId(""); setComparison(null);
+      setWhatIfProposal(null); setWhatIfQuestion("");
+      await startRun(branched);
+    } catch (cause) { setError(explainError(cause)); setBusy(false); }
+  }
+
+  async function saveScenarioContext(context: Record<string, unknown>) {
+    if (!activeScenario) return;
+    const updated = await api<Scenario>(`/scenarios/${activeScenario.id}`, getToken, {
+      ...jsonBody({ context }),
+      method: "PATCH",
+    });
+    setScenarios((items) => items.map((item) => item.id === updated.id ? updated : item));
+    setNotice(`Geographic context saved to ${updated.name}. It will be included in future run snapshots.`);
+  }
+
+  async function createGeographicScenario(name: string, overrides: Record<string, number>, context: Record<string, unknown>) {
+    const baseline = scenarios.find((item) => item.is_baseline);
+    if (!baseline) throw new Error("This exploration has no baseline scenario yet.");
+    setBusy(true); setError("");
+    try {
+      const branched = await api<Scenario>(`/scenarios/${baseline.id}/branch`, getToken, jsonBody({ name, overrides, context }));
+      setScenarios((items) => [...items, branched]);
+      setSelectedScenario(branched.id); setSelectedRunId(""); setComparison(null);
+      await startRun(branched);
+    } catch (cause) { setError(explainError(cause)); }
+    finally { setBusy(false); }
+  }
+
+  async function promoteScenario(scenario: Scenario) {
+    if (scenario.is_baseline || busy) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const promoted = await api<Scenario>(`/scenarios/${scenario.id}/promote`, getToken, { method: "POST" });
+      setScenarios((items) => items.map((item) => item.experiment_id === promoted.experiment_id ? { ...item, is_baseline: item.id === promoted.id } : item));
+      setNotice(`${promoted.name} is now the baseline. The previous baseline and all runs are preserved.`);
+    } catch (cause) { setError(explainError(cause)); }
+    finally { setBusy(false); }
+  }
+
   async function branchScenario(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!activeScenario || !activeId) return;
     setBusy(true); setError("");
@@ -554,7 +660,7 @@ export default function Home() {
   async function compareRuns() {
     if (selectedRuns.length < 2) return;
     setBusy(true); setError("");
-    try { setComparison(await api<{ metrics: { metric: string; values: Record<string, number | string>; delta_from_first: Record<string, number> | null }[] }>(`/experiments/${activeId}/scenarios/compare`, getToken, jsonBody({ run_ids: selectedRuns }))); }
+    try { setComparison(await api<{ runs: { id: string; scenario_id: string; seed: number; config: Record<string, number>; context: Record<string, unknown> }[]; metrics: { metric: string; values: Record<string, number | string>; delta_from_first: Record<string, number> | null }[] }>(`/experiments/${activeId}/scenarios/compare`, getToken, jsonBody({ run_ids: selectedRuns }))); }
     catch (cause) { setError(explainError(cause)); }
     finally { setBusy(false); }
   }
@@ -692,6 +798,8 @@ export default function Home() {
   const selectedHistoryRun = runs.find((run) => run.id === selectedRunId) || null;
   const latestRun = selectedHistoryRun || runs[0];
   const selectedScenarioRun = selectedHistoryRun?.status === "completed" ? selectedHistoryRun : runs.find((run) => run.scenario_id === activeScenario?.id && run.status === "completed");
+  const geographicSnapshot = selectedScenarioRun?.context?.geography as Record<string, unknown> | undefined;
+  const whatIfSnapshot = selectedScenarioRun?.context?.what_if as Record<string, unknown> | undefined;
   const metricLabels: Record<string, string> = {
     customers_arrived: "Arrivals", customers_entered_service: "Entered service", customers_served: "Completed by horizon",
     customers_completed_after_horizon: "Completed after horizon", customers_unfinished_at_horizon: "Unfinished at horizon", mean_wait_minutes: "Average wait",
@@ -832,7 +940,7 @@ export default function Home() {
             <section aria-label="Experiment overview" className="metric-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{(currentEngine === "queueing" ? [["Arrivals / hour", config.arrival_rate_per_hour, "Configured assumption"], ["Service rate", config.service_rate_per_hour_per_server, "Per server, per hour"], ["Servers", config.servers, "Parallel capacity"], ["Duration", `${config.duration_hours ?? "—"} h`, "Simulation window"]] : currentEngine === "inventory" ? [["Demand / day", config.average_daily_demand, "Average assumption"], ["Reorder point", config.reorder_point, "Inventory threshold"], ["Order quantity", config.order_quantity, "Units per order"], ["Duration", `${config.duration_days ?? "—"} days`, "Simulation window"]] : [["Trials", config.trials, "Repeated scenarios"], ["Periods", config.periods, "Per trial"], ["Demand likely", config.demand_mode, "Units per period"], ["Fixed cost", config.fixed_cost_per_period, "Per period"]]).map(([label, value, note]) => <MetricCard key={String(label)} label={String(label)} value={String(value ?? "—")} note={String(note)} />)}</section>
 
             <div className="dashboard-grid grid gap-7 xl:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)]">
-              <section className="workbench-panel min-w-0 border border-border bg-card">
+                <section className="workbench-panel min-w-0 border border-border bg-card">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Scenario workbench</p><h2 className="mt-1 text-lg font-extrabold">Choose a scenario</h2></div>{currentEngine === "queueing" && <button type="button" onClick={() => { setBranchArrival(String(Number(config.arrival_rate_per_hour || 0) * 1.25)); setShowBranch(true); }} disabled={!activeScenario} className="flex min-h-10 items-center gap-2 border border-border px-3 text-sm font-bold hover:bg-muted disabled:opacity-50"><Plus size={15} aria-hidden="true" />Branch scenario</button>}</div>
                 {showBranch && <form onSubmit={branchScenario} className="grid gap-3 border-b border-border bg-muted p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><Field id="branch-name" label="Scenario name" required value={branchName} onChange={(event) => setBranchName(event.target.value)} /><Field id="branch-arrival" label="Arrivals / hour" type="text" inputMode="decimal" required value={branchArrival} onChange={(event) => setBranchArrival(event.target.value)} hint="Other settings inherit from parent" /><div className="flex gap-2"><button type="button" onClick={() => setShowBranch(false)} className="min-h-11 border border-border px-3 text-sm font-semibold">Cancel</button><button type="submit" disabled={busy} className="min-h-11 border border-foreground bg-primary px-3 text-sm font-extrabold text-primary-foreground">Create & run</button></div></form>}
                 <div className="divide-y divide-border">
@@ -840,7 +948,7 @@ export default function Home() {
                     const scenarioRuns = runs.filter((run) => run.scenario_id === scenario.id);
                     const latest = scenarioRuns[0];
                     return <button type="button" key={scenario.id} onClick={() => { setSelectedScenario(scenario.id); setComparison(null); }} className={`flex min-h-20 w-full items-center justify-between gap-4 px-5 py-4 text-left hover:bg-muted ${activeScenario?.id === scenario.id ? "bg-accent/60" : ""}`}>
-                      <span className="flex min-w-0 items-center gap-3"><span className={`grid size-10 shrink-0 place-items-center border border-border ${scenario.is_baseline ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}><FlaskConical size={17} aria-hidden="true" /></span><span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="truncate font-bold">{scenario.name}</span>{scenario.is_baseline && <span className="bg-muted px-2 py-0.5 text-xs font-bold uppercase tracking-wider">Baseline</span>}</span><span className="mt-1 block text-xs text-muted-foreground">{Object.keys(scenario.overrides).length ? `${Object.entries(scenario.overrides).map(([key, value]) => `${key.replaceAll("_", " ")}: ${value}`).join(" · ")}` : "Uses experiment settings"}</span></span></span>
+                      <span className="flex min-w-0 items-center gap-3"><span className={`grid size-10 shrink-0 place-items-center border border-border ${scenario.is_baseline ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}><FlaskConical size={17} aria-hidden="true" /></span><span className="min-w-0"><span className="flex flex-wrap items-center gap-2"><span className="truncate font-bold">{scenario.name}</span>{scenario.is_baseline && <span className="bg-muted px-2 py-0.5 text-xs font-bold uppercase tracking-wider">Baseline</span>}</span><span className="mt-1 block text-xs text-muted-foreground">{scenarioCaption(scenario)}</span></span></span>
                       <span className="flex shrink-0 items-center gap-3"><span className="hidden text-xs text-muted-foreground sm:inline">{latest ? <span className="inline-flex items-center gap-1.5"><span className={`size-2 rounded-full ${latest.status === "completed" ? "bg-success" : latest.status === "failed" ? "bg-destructive" : "motion-safe:animate-pulse bg-secondary"}`} />{statusCopy[latest.status] || latest.status}</span> : "No runs"}</span><ArrowUpRight size={16} className="text-muted-foreground" aria-hidden="true" /></span>
                     </button>;
                   })}
@@ -849,14 +957,31 @@ export default function Home() {
 
               <aside className="space-y-5">
                 <section className="result-panel border border-border bg-card">
-                  <div className="border-b border-border p-5"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Selected scenario</p><h2 className="mt-1 text-lg font-extrabold">{activeScenario?.name || "Choose a scenario"}</h2></div>
+                  <div className="flex items-start justify-between gap-3 border-b border-border p-5"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Selected scenario</p><h2 className="mt-1 text-lg font-extrabold">{activeScenario?.name || "Choose a scenario"}</h2></div>{activeScenario && !activeScenario.is_baseline && <button type="button" disabled={busy} onClick={() => void promoteScenario(activeScenario)} className="min-h-10 shrink-0 rounded-full border border-border px-3 text-xs font-bold hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">Make baseline</button>}</div>
                   {selectedScenarioRun ? <div className="space-y-4 p-5">
                     <RunVisualizations engine={currentEngine} metrics={selectedScenarioRun.metrics || {}} />
+                    {whatIfSnapshot && <section className="rounded-2xl border border-border bg-accent/40 p-4"><p className="text-xs font-bold uppercase tracking-wider">Scenario question</p><p className="mt-2 text-sm font-bold">{String(whatIfSnapshot.question || "What-if scenario")}</p>{typeof whatIfSnapshot.answer === "string" && <p className="mt-2 text-sm leading-6 text-muted-foreground">{whatIfSnapshot.answer}</p>}<p className="mt-2 text-xs text-muted-foreground">A separate scenario branch; the original baseline remains available for comparison.</p></section>}
+                    {geographicSnapshot && <section className="rounded-2xl border border-border bg-muted/60 p-4"><p className="text-xs font-bold uppercase tracking-wider">Geography in this run</p><p className="mt-2 text-sm font-bold">{String(geographicSnapshot.area_name || "Selected market")} · {String(geographicSnapshot.area_code || "")}</p>{typeof geographicSnapshot.indicator_name === "string" && <p className="mt-1 text-xs leading-5 text-muted-foreground">{geographicSnapshot.indicator_name} · {String(geographicSnapshot.model_use || "context only")}</p>}<p className="mt-2 text-xs leading-5 text-muted-foreground">This is the saved run snapshot. Any model change came from the explicitly recorded scaling formula in this scenario; geographic context by itself does not change the engine.</p>{typeof geographicSnapshot.source_url === "string" && <a href={geographicSnapshot.source_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-10 items-center text-xs font-bold underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring">Open source observation</a>}</section>}
                     {Object.entries(selectedScenarioRun.metrics || {}).filter(([name, value]) => name !== "assumptions" && name !== "series" && name !== "histogram" && typeof value !== "object").map(([name, value]) => <div key={name} className="flex items-baseline justify-between gap-4 border-b border-border pb-3"><span className="text-sm text-muted-foreground">{metricLabels[name] || name.replaceAll("_", " ")}</span><span className="font-mono text-sm font-bold tabular-nums">{formatMetric(name, value)}</span></div>)}
                     <p className="text-xs leading-5 text-muted-foreground">Seed {selectedScenarioRun.seed}. Outputs are generated by the {currentEngine.replaceAll("_", " ")} model.</p>
                     {!runExplanation || runExplanation.runId !== selectedScenarioRun.id ? <div className="space-y-2 border border-border bg-muted p-3 text-sm"><p className="font-semibold">Preparing the balanced review…</p><p className="text-xs leading-5 text-muted-foreground">Sandbox is separating model-supported upside and downside from evidence it does not have.</p><button type="button" disabled={busy} onClick={() => void interpretRun(selectedScenarioRun)} className="min-h-10 border border-border bg-card px-3 text-xs font-bold hover:bg-background disabled:opacity-50">Retry review</button></div> : <button type="button" disabled={busy} onClick={() => void interpretRun(selectedScenarioRun)} className="flex min-h-10 w-full items-center justify-center gap-2 border border-border px-3 text-sm font-bold hover:bg-muted disabled:opacity-50"><Sparkles size={15} aria-hidden="true" />Refresh balanced review</button>}
-                    {runExplanation?.runId === selectedScenarioRun.id && <div className="review-summary rounded-2xl bg-muted p-4"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Balanced readout</p><p className="mt-2 text-sm leading-6">{runExplanation.result.summary}</p><details className="review-details mt-4"><summary className="min-h-11 cursor-pointer rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold">Explore the full review</summary><div className="mt-4 space-y-4 text-sm"><div className="grid gap-3 sm:grid-cols-2"><div className="border border-success/50 bg-card p-3"><p className="font-bold text-success">What looks promising</p><ul className="mt-2 list-disc space-y-1 pl-5">{runExplanation.result.upside.map((item) => <li key={item}>{item}</li>)}</ul></div><div className="border border-warning bg-card p-3"><p className="font-bold">Risks and downside</p><ul className="mt-2 list-disc space-y-1 pl-5">{runExplanation.result.downside.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="border border-border bg-card p-3"><p className="font-bold">Costs and competition</p><ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{runExplanation.result.cost_and_competition.map((item) => <li key={item}>{item}</li>)}</ul></div>{runExplanation.result.findings.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">What the run shows</p><ul className="mt-1 list-disc space-y-1 pl-5">{runExplanation.result.findings.map((item) => <li key={item}>{item}</li>)}</ul></div>}{runExplanation.result.evidence_sources.length > 0 && <div className="border border-border bg-card p-3"><p className="font-bold">Sources reviewed as context</p><ul className="mt-2 space-y-2">{runExplanation.result.evidence_sources.map((source, index) => <li key={`${source.name}-${index}`} className="text-xs leading-5"><span className="font-semibold">{source.name}</span><span className="text-muted-foreground"> · {[source.provider, source.reference_area, source.period, source.license].filter(Boolean).join(" · ")}</span>{source.source_url && <> · <a className="underline underline-offset-2" href={source.source_url} target="_blank" rel="noreferrer">Source</a></>}</li>)}</ul><p className="mt-2 text-xs text-muted-foreground">These sources provide context; they did not calibrate or change the simulation.</p></div>}{runExplanation.result.evidence_gaps.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Evidence still needed</p><ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{runExplanation.result.evidence_gaps.map((item) => <li key={item}>{item}</li>)}</ul></div>}{runExplanation.result.limitations.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Model limits</p><ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{runExplanation.result.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>}{runExplanation.result.follow_up_questions.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Next questions</p><ul className="mt-1 list-disc space-y-1 pl-5">{runExplanation.result.follow_up_questions.map((item) => <li key={item}>{item}</li>)}</ul></div>}<p className="border-t border-border pt-3 text-xs leading-5 text-muted-foreground">{runExplanation.result.interpretation_notice}</p></div></details></div>}
+                    {runExplanation?.runId === selectedScenarioRun.id && <div className="review-summary rounded-2xl bg-muted p-4"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Balanced readout</p><p className="mt-2 text-sm leading-6">{runExplanation.result.summary}</p><details className="review-details mt-4"><summary className="min-h-11 cursor-pointer rounded-xl border border-border bg-card px-4 py-3 text-sm font-bold">Explore the full review</summary><div className="mt-4 space-y-4 text-sm"><div className="grid gap-3 sm:grid-cols-2"><div className="border border-success/50 bg-card p-3"><p className="font-bold text-success">What looks promising</p><ul className="mt-2 list-disc space-y-1 pl-5">{runExplanation.result.upside.map((item) => <li key={item}>{item}</li>)}</ul></div><div className="border border-warning bg-card p-3"><p className="font-bold">Risks and downside</p><ul className="mt-2 list-disc space-y-1 pl-5">{runExplanation.result.downside.map((item) => <li key={item}>{item}</li>)}</ul></div></div><div className="border border-border bg-card p-3"><p className="font-bold">Costs and competition</p><ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{runExplanation.result.cost_and_competition.map((item) => <li key={item}>{item}</li>)}</ul></div>{runExplanation.result.findings.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">What the run shows</p><ul className="mt-1 list-disc space-y-1 pl-5">{runExplanation.result.findings.map((item) => <li key={item}>{item}</li>)}</ul></div>}{runExplanation.result.evidence_sources.length > 0 && <div className="border border-border bg-card p-3"><p className="font-bold">Sources reviewed as context</p><ul className="mt-2 space-y-2">{runExplanation.result.evidence_sources.map((source, index) => <li key={`${source.name}-${index}`} className="text-xs leading-5"><span className="font-semibold">{source.name}</span><span className="text-muted-foreground"> · {[source.provider, source.reference_area, source.period, source.license].filter(Boolean).join(" · ")}</span>{source.source_url && <> · <a className="underline underline-offset-2" href={source.source_url} target="_blank" rel="noreferrer">Source</a></>}</li>)}</ul><p className="mt-2 text-xs text-muted-foreground">Sources do not calibrate the model. A geographic ratio changes only the explicit input saved with the scenario, as a sensitivity assumption.</p></div>}{runExplanation.result.evidence_gaps.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Evidence still needed</p><ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{runExplanation.result.evidence_gaps.map((item) => <li key={item}>{item}</li>)}</ul></div>}{runExplanation.result.limitations.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Model limits</p><ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">{runExplanation.result.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>}{runExplanation.result.follow_up_questions.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Next questions</p><ul className="mt-1 list-disc space-y-1 pl-5">{runExplanation.result.follow_up_questions.map((item) => <li key={item}>{item}</li>)}</ul></div>}<p className="border-t border-border pt-3 text-xs leading-5 text-muted-foreground">{runExplanation.result.interpretation_notice}</p></div></details></div>}
                     {runExplanation?.runId === selectedScenarioRun.id && <div className="border-2 border-foreground bg-accent p-4"><p className="text-xs font-bold uppercase tracking-wider">Suggested next step</p><p className="mt-2 text-sm leading-6">{runExplanation.result.recommendation}</p></div>}
+                    <section className="rounded-2xl border border-border bg-card p-4" aria-labelledby="what-if-title">
+                      <div className="flex items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent text-foreground"><Sparkles size={16} aria-hidden="true" /></span><div><h3 id="what-if-title" className="font-extrabold">Ask a what-if</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">Ask in plain language. Sandbox will explain whether this model can represent it and show any proposed input changes before running them.</p></div></div>
+                      <form onSubmit={(event) => void askWhatIf(event)} className="mt-3 space-y-3">
+                        <label className="sr-only" htmlFor="what-if-question">Your question</label>
+                        <textarea id="what-if-question" required minLength={3} maxLength={4000} rows={3} value={whatIfQuestion} onChange={(event) => setWhatIfQuestion(event.target.value)} placeholder="What would you like to explore? For example: what if fewer customers subscribe?" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-6 outline-none transition focus-visible:ring-2 focus-visible:ring-ring" />
+                        <button type="submit" disabled={busy || whatIfQuestion.trim().length < 3} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 text-sm font-extrabold text-primary-foreground disabled:opacity-50"><Sparkles size={15} aria-hidden="true" />{busy ? "Thinking…" : "Explore question"}</button>
+                      </form>
+                      {whatIfProposal?.runId === selectedScenarioRun.id && <div className="mt-4 space-y-3 rounded-xl bg-muted p-3" aria-live="polite">
+                        <div><p className="text-xs font-bold uppercase tracking-wider">{whatIfProposal.proposal.can_simulate ? `Proposed scenario · ${whatIfProposal.proposal.scenario_name}` : "Model fit"}</p><p className="mt-2 text-sm leading-6">{whatIfProposal.proposal.answer}</p></div>
+                        {whatIfProposal.proposal.can_simulate && <div><p className="text-xs font-bold uppercase tracking-wider">Inputs to change</p><ul className="mt-1 space-y-1 text-sm">{Object.entries(whatIfProposal.proposal.overrides).map(([key, value]) => <li key={key} className="flex justify-between gap-3"><span className="capitalize text-muted-foreground">{key.replaceAll("_", " ")}</span><strong className="text-right">{String(value)}</strong></li>)}</ul></div>}
+                        {whatIfProposal.proposal.assumptions.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Assumptions</p><ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-5">{whatIfProposal.proposal.assumptions.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+                        {whatIfProposal.proposal.limitations.length > 0 && <div><p className="text-xs font-bold uppercase tracking-wider">Limits</p><ul className="mt-1 list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">{whatIfProposal.proposal.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+                        {whatIfProposal.proposal.can_simulate && <button type="button" disabled={busy} onClick={() => void createWhatIfScenario()} className="flex min-h-10 w-full items-center justify-center rounded-xl bg-foreground px-3 text-sm font-bold text-background disabled:opacity-50">Create & run this scenario</button>}
+                      </div>}
+                    </section>
                     {Array.isArray(selectedScenarioRun.metrics?.assumptions) && <details className="border border-border p-3"><summary className="cursor-pointer text-sm font-semibold">Model assumptions</summary><ul className="mt-3 list-disc space-y-2 pl-5 text-xs leading-5 text-muted-foreground">{(selectedScenarioRun.metrics.assumptions as unknown as string[]).map((assumption) => <li key={assumption}>{assumption}</li>)}</ul></details>}
                     <div className="grid grid-cols-3 gap-2" id="reports"><button type="button" disabled={busy} onClick={() => void downloadReport(selectedScenarioRun, "pdf")} className="min-h-10 border border-border text-xs font-bold hover:bg-muted">PDF</button><button type="button" disabled={busy} onClick={() => void downloadReport(selectedScenarioRun, "csv")} className="min-h-10 border border-border text-xs font-bold hover:bg-muted">CSV</button><button type="button" disabled={busy} onClick={() => void downloadReport(selectedScenarioRun, "json")} className="min-h-10 border border-border text-xs font-bold hover:bg-muted">JSON</button></div>
                   </div> : <div className="state-mascot p-5"><SandboxMascot mood={runs.some((run) => run.scenario_id === activeScenario?.id && (run.status === "queued" || run.status === "running")) ? "working" : "curious"} size="small" /><p className="font-bold">{runs.find((run) => run.scenario_id === activeScenario?.id) ? "Run in progress" : "No completed run yet"}</p><p className="max-w-xs text-sm leading-5 text-muted-foreground">Start this scenario to see modelled metrics and export a report.</p>{runs.filter((run) => run.scenario_id === activeScenario?.id).map((run) => <div key={run.id} className="mt-2 flex w-full items-center justify-between gap-3 border border-border p-3 text-xs"><span className="font-mono">{run.id.slice(0, 8)} · seed {run.seed}</span><span className="font-bold">{statusCopy[run.status] || run.status}{run.status === "running" && ` ${run.progress}%`}</span></div>)}</div>}
@@ -865,10 +990,20 @@ export default function Home() {
                   <div className="flex items-start justify-between gap-3 border-b border-border p-5"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Run history</p><h2 className="mt-1 text-lg font-extrabold">Compare results</h2></div><RefreshCw size={16} className={liveRuns ? "motion-safe:animate-spin text-secondary" : "text-muted-foreground"} aria-hidden="true" /></div>
                   {runs.length === 0 ? <div className="state-mascot p-5"><SandboxMascot mood="resting" size="small" /><p className="text-sm font-semibold">No runs yet</p><p className="max-w-xs text-xs leading-5 text-muted-foreground">Run a scenario and your history will gather here for comparison.</p></div> : <div className="max-h-72 divide-y divide-border overflow-auto">{runs.map((run) => <div key={run.id} className="flex min-h-14 items-center gap-3 px-4 py-3 hover:bg-muted"><input id={`compare-${run.id}`} type="checkbox" checked={selectedRuns.includes(run.id)} disabled={run.status !== "completed" || (!selectedRuns.includes(run.id) && selectedRuns.length >= 10)} onChange={(event) => setSelectedRuns((items) => event.target.checked ? [...items, run.id] : items.filter((id) => id !== run.id))} className="size-4 accent-[var(--primary)]" /><label htmlFor={`compare-${run.id}`} className="min-w-0 flex-1 cursor-pointer"><span className="block truncate text-sm font-semibold">{scenarios.find((item) => item.id === run.scenario_id)?.name || "Scenario"}</span><span className="block text-xs text-muted-foreground">{new Date(run.created_at).toLocaleString()} · seed {run.seed}</span></label><span className="text-xs font-bold">{statusCopy[run.status] || run.status}</span>{(run.status === "queued" || run.status === "running") && <button type="button" disabled={busy} onClick={() => void cancelRun(run)} className="min-h-10 border border-border px-2 text-xs font-semibold hover:bg-card disabled:opacity-50">Cancel</button>}</div>)}</div>}
                   <div className="border-t border-border p-4"><button type="button" disabled={selectedRuns.length < 2 || busy} onClick={() => void compareRuns()} className="flex min-h-10 w-full items-center justify-center gap-2 border border-foreground bg-primary px-3 text-sm font-extrabold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">Compare selected ({selectedRuns.length})</button>
-                    {comparison && <div className="mt-4 space-y-3">{comparison.metrics.map((item) => <div key={item.metric} className="border border-border p-3"><p className="text-sm font-bold">{metricLabels[item.metric] || item.metric.replaceAll("_", " ")}</p><div className="mt-2 space-y-1">{Object.entries(item.values).map(([id, value]) => <p key={id} className="flex justify-between gap-3 font-mono text-xs"><span>{scenarios.find((s) => s.id === runs.find((r) => r.id === id)?.scenario_id)?.name || id.slice(0, 8)}</span><span>{formatMetric(item.metric, value)}{item.delta_from_first && item.delta_from_first[id] !== 0 && <span className="ml-2 text-muted-foreground">({item.delta_from_first[id] > 0 ? "+" : ""}{formatMetric(item.metric, item.delta_from_first[id])})</span>}</span></p>)}</div></div>)}</div>}
+                    {comparison && <div className="mt-4 space-y-3">{comparison.metrics.map((item) => <div key={item.metric} className="border border-border p-3"><p className="text-sm font-bold">{metricLabels[item.metric] || item.metric.replaceAll("_", " ")}</p><div className="mt-2 space-y-1">{Object.entries(item.values).map(([id, value]) => <p key={id} className="flex justify-between gap-3 font-mono text-xs"><span>{scenarios.find((s) => s.id === runs.find((r) => r.id === id)?.scenario_id)?.name || id.slice(0, 8)}</span><span>{formatMetric(item.metric, value)}{item.delta_from_first && item.delta_from_first[id] !== 0 && <span className="ml-2 text-muted-foreground">({item.delta_from_first[id] > 0 ? "+" : ""}{formatMetric(item.metric, item.delta_from_first[id])})</span>}</span></p>)}</div></div>)}<div className="rounded-2xl border border-border bg-muted/50 p-3"><p className="text-xs font-bold uppercase tracking-wider">Compared assumptions and geography</p>{comparison.runs.map((run) => { const geo = run.context?.geography as Record<string, unknown> | undefined; const applied = geo?.transformation as Record<string, unknown> | undefined; return <p key={run.id} className="mt-2 text-xs leading-5"><strong>{scenarios.find((item) => item.id === run.scenario_id)?.name || run.id.slice(0, 8)}:</strong> {geo?.area_name ? `${String(geo.area_name)} · ${String(geo.indicator_name || "location only")}` : "No geographic factor"}{applied?.ratio ? ` · applied ratio ${Number(applied.ratio).toFixed(3)}` : " · context only"}</p>; })}</div></div>}
                   </div>
                 </section>
               </aside>
+              <div className="min-w-0 xl:col-span-2"><GeographyWorkbench
+                scenario={activeScenario}
+                baselineScenario={scenarios.find((item) => item.is_baseline) || null}
+                engine={currentEngine}
+                theme={theme}
+                baselineConfig={effectiveScenarioConfig(scenarios.find((item) => item.is_baseline) || null, scenarios, config)}
+                token={getToken}
+                onSaveContext={saveScenarioContext}
+                onCreateScenario={createGeographicScenario}
+              /></div>
             </div>
             </>}
             <section id="environment" className="border border-border bg-card">

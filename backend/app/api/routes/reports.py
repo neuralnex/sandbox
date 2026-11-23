@@ -32,6 +32,8 @@ def _render_report(snapshot: dict, output_format: str) -> tuple[bytes, str, str]
         writer.writerow(["section", "name", "value"])
         writer.writerow(["experiment", "title", snapshot["experiment"]["title"]])
         writer.writerow(["experiment", "objective", snapshot["experiment"]["objective"]])
+        for name, value in snapshot.get("scenario", {}).get("context", {}).items():
+            writer.writerow(["scenario_context", name, json.dumps(value, ensure_ascii=False)])
         for name, value in snapshot["configuration"].items():
             writer.writerow(["configuration", name, value])
         for name, value in snapshot["metrics"].items():
@@ -57,6 +59,22 @@ def _render_report(snapshot: dict, output_format: str) -> tuple[bytes, str, str]
             styles["BodyText"],
         )
     )
+    geography = snapshot.get("scenario", {}).get("context", {}).get("geography")
+    if isinstance(geography, dict):
+        story.extend([Spacer(1, 10), Paragraph("Geographic factor snapshot", styles["Heading2"])])
+        for label in ("area_name", "area_code", "indicator_name", "target_observation", "reference_area_name", "reference_observation", "transformation", "model_use", "source_url"):
+            value = geography.get(label)
+            if value is not None:
+                story.append(Paragraph(f"{escape(label.replace('_', ' ').title())}: {escape(json.dumps(value, ensure_ascii=False) if isinstance(value, dict) else str(value))}", styles["BodyText"]))
+        story.append(Paragraph("Country-level context is not a calibrated geographic model. Any parameter scaling is an explicit scenario assumption.", styles["BodyText"]))
+    what_if = snapshot.get("scenario", {}).get("context", {}).get("what_if")
+    if isinstance(what_if, dict):
+        story.extend([Spacer(1, 10), Paragraph("What-if question", styles["Heading2"])])
+        for label in ("question", "answer"):
+            value = what_if.get(label)
+            if value:
+                story.append(Paragraph(f"{label.title()}: {escape(str(value))}", styles["BodyText"]))
+        story.append(Paragraph("This scenario is a separate branch. Its outputs remain conditional on the saved model assumptions.", styles["BodyText"]))
     story.append(Spacer(1, 12))
     rows = [["Metric", "Value"]]
     rows.extend([[str(name), str(value)] for name, value in snapshot["metrics"].items()])
@@ -99,7 +117,7 @@ def _render_report(snapshot: dict, output_format: str) -> tuple[bytes, str, str]
                 story.append(Paragraph(f"{escape(str(item['name']))}: {escape(str(item['source_url']))}", styles["BodyText"]))
             if item.get("license"):
                 story.append(Paragraph(f"License / terms: {escape(str(item['license']))}", styles["BodyText"]))
-        story.append(Paragraph("Source records reflect the linked environment when this report was created. Context data was not used to calibrate the simulation.", styles["BodyText"]))
+        story.append(Paragraph("Source records reflect the linked environment when this report was created. They do not calibrate the model; any geographic scaling is separately recorded as a scenario assumption.", styles["BodyText"]))
     story.append(Spacer(1, 12))
     story.append(
         Paragraph(f"Configuration: {escape(json.dumps(snapshot['configuration']))}", styles["Code"])
@@ -157,7 +175,7 @@ def create_report(
             "environment": environment_name,
         },
         "data_sources": data_sources,
-        "scenario": {"name": scenario.name, "version": run.scenario_version},
+        "scenario": {"name": scenario.name, "version": run.scenario_version, "context": run.context or {}},
         "simulation": {
             "run_id": str(run.id),
             "engine": run.engine,

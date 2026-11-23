@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 
@@ -62,3 +64,39 @@ async def get_indicator_data(
         params["timePeriodTo"] = time_period_to
     params["skip"] = "0"
     return await _request_json("GET", "data", params=params)
+
+
+@router.get("/compare")
+async def compare_indicator_areas(
+    _: CurrentUser,
+    database_id: str = Query(min_length=2, max_length=80, pattern=r"^[A-Za-z0-9_-]+$", alias="DATABASE_ID"),
+    indicator: str = Query(min_length=2, max_length=120, pattern=r"^[A-Za-z0-9_.-]+$", alias="INDICATOR"),
+    ref_areas: list[str] = Query(min_length=1, max_length=16, alias="REF_AREA"),
+    time_period_from: str | None = Query(default="2015", max_length=20, alias="timePeriodFrom"),
+    time_period_to: str | None = Query(default="2025", max_length=20, alias="timePeriodTo"),
+) -> dict:
+    areas = list(dict.fromkeys(area.strip().upper() for area in ref_areas))
+    if any(not area or len(area) > 20 or not area.replace("_", "").isalnum() for area in areas):
+        raise HTTPException(status_code=422, detail="Reference area codes may contain letters, numbers, and underscores")
+
+    semaphore = asyncio.Semaphore(4)
+
+    async def load_area(area: str) -> dict:
+        params = {"DATABASE_ID": database_id, "INDICATOR": indicator, "REF_AREA": area, "skip": "0"}
+        if time_period_from:
+            params["timePeriodFrom"] = time_period_from
+        if time_period_to:
+            params["timePeriodTo"] = time_period_to
+        async with semaphore:
+            try:
+                payload = await _request_json("GET", "data", params=params)
+                observations = payload.get("value", [])
+                return {"reference_area": area, "observations": observations if isinstance(observations, list) else []}
+            except HTTPException as exc:
+                return {"reference_area": area, "observations": [], "error": exc.detail}
+
+    return {
+        "database_id": database_id,
+        "indicator": indicator,
+        "value": await asyncio.gather(*(load_area(area) for area in areas)),
+    }

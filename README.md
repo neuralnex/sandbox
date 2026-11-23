@@ -21,6 +21,7 @@ Sandbox is a workspace for exploring operational and financial scenarios. Descri
   <a href="https://simpy.readthedocs.io/"><img alt="SimPy" src="https://img.shields.io/badge/SimPy-4B5563?style=for-the-badge&logo=python&logoColor=white"></a>
   <a href="https://openrouter.ai/"><img alt="OpenRouter" src="https://img.shields.io/badge/OpenRouter-6B5CE7?style=for-the-badge&logo=openrouter&logoColor=white"></a>
   <a href="https://data360.worldbank.org/en/api"><img alt="World_Bank_Data360" src="https://img.shields.io/badge/World_Bank_Data360-002244?style=for-the-badge&logo=worldbank&logoColor=white"></a>
+  <a href="https://maplibre.org/maplibre-gl-js/docs/"><img alt="MapLibre_GL_JS" src="https://img.shields.io/badge/MapLibre_GL_JS-396CB2?style=for-the-badge&logo=maplibre&logoColor=white"></a>
   <a href="https://www.reportlab.com/"><img alt="ReportLab" src="https://img.shields.io/badge/ReportLab-8B5CF6?style=for-the-badge&logo=python&logoColor=white"></a>
   <a href="https://pydantic.dev/"><img alt="Pydantic" src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white"></a>
   <a href="https://www.uvicorn.org/"><img alt="Uvicorn" src="https://img.shields.io/badge/Uvicorn-4051B5?style=for-the-badge&logo=python&logoColor=white"></a>
@@ -54,9 +55,9 @@ Industry starter prompts cover areas such as retail, healthcare, logistics, manu
 
 ## Data and evidence
 
-The World Bank Data360 connection lets users search indicators, preview country and time-period observations, and save selected records with source and attribution details in an environment. Data can then be carried into report provenance.
+The World Bank Data360 connection lets users search indicators, preview country and time-period observations, save source records, and compare selected country-level factors on a MapLibre globe. A founder can keep a factor as context or explicitly scale a supported baseline demand/capacity input by the ratio between a target and reference market. The input change, source observations, periods, and formula are snapshotted with the scenario and run.
 
-Data360 is a **context and provenance rail** in this alpha. Its observations do not currently set simulation parameters or calibrate the engines. Check the terms for each indicator before reusing or redistributing it; licensing may vary by source.
+That ratio is a transparent sensitivity assumption, not a validated causal effect or geographic calibration. Country outlines and normalized extrusion show country-level indicators; the map does not provide city detail, terrain, or a spatial simulation. Check the terms for each indicator before reusing or redistributing it; licensing may vary by source.
 
 ## Who Sandbox is for
 
@@ -68,15 +69,16 @@ Sandbox is ready for a **limited product alpha** focused on workflow usability: 
 
 The current engines use simplified assumptions. Queue arrivals and service times are exponential with identical continuously available servers. Inventory demand is sampled from a normal distribution and clipped at zero. Monte Carlo outcomes use triangular ranges for demand, price, and variable cost. These models do not yet account for live business records, staffing calendars, seasonality, supplier constraints, or calibrated sector behavior. Results are conditional on the inputs and engine assumptions; they are not forecasts or recommendations for operational decisions.
 
-The interface includes 2D charts and scenario comparisons. It does not currently provide 3D, geospatial simulation, or a digital twin.
+The interface includes 2D charts, a 3D country-level globe for geographic context, and persistent what-if scenario comparisons. It does not provide a terrain model, city-level map layers, or a calibrated geospatial digital twin.
 
 ## Product tour
 
 1. Create an experiment around a business question.
 2. Select a model and provide the values it requires.
 3. Review the assumptions and create a baseline run.
-4. Branch scenarios to compare different inputs.
-5. Attach useful context and export a report for review.
+4. Ask a what-if or compare a country factor, then review the proposed input changes.
+5. Run the new scenario, compare it with the baseline, and promote it if you choose. Earlier scenarios and runs remain available.
+6. Attach useful context and export a report with the run settings and geographic provenance.
 
 ## Get started
 
@@ -88,4 +90,4 @@ Firebase Authentication supports email and password and Google sign-in. GitHub s
 
 ## Technology
 
-The badges above link to the project technologies and services: Next.js, React, TypeScript, Tailwind CSS, Lucide, Firebase Authentication and Admin, FastAPI, Python, Uvicorn, Pydantic, HTTPX, PostgreSQL, Psycopg, SQLAlchemy, Alembic, Celery, Redis, SimPy, Node.js, PostCSS, ESLint, OpenRouter, World Bank Data360, ReportLab, and Docker.
+The badges above link to the project technologies and services: Next.js, React, TypeScript, Tailwind CSS, Lucide, Firebase Authentication and Admin, FastAPI, Python, Uvicorn, Pydantic, HTTPX, PostgreSQL, Psycopg, SQLAlchemy, Alembic, Celery, Redis, SimPy, Node.js, PostCSS, ESLint, OpenRouter, World Bank Data360, MapLibre GL JS, ReportLab, and Docker.
