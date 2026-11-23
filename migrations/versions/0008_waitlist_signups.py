@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0008_waitlist_signups"
-down_revision = "0007_workspace_profile"
+down_revision = "0008_geography_context"
 branch_labels = None
 depends_on = None
 
