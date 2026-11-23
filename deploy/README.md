@@ -25,8 +25,14 @@ In the Render dashboard:
 3. Set a service name such as `sandbox-api`, choose a region, and select a plan.
 4. Set the health check path to `/health`.
 5. Add the API environment variables listed below.
-6. If the selected plan offers a **Pre-Deploy Command**, set it to `alembic upgrade head` so migrations run once before the API deploy. This must use the same `DATABASE_URL`. Render currently offers pre-deploy commands on paid web services. If your plan does not include that feature, run migrations once from a trusted environment that can reach the production database before deploying a schema change. [Render pre-deploy commands](https://render.com/docs/deploys)
-7. Deploy. The image command binds Uvicorn to `0.0.0.0` and uses Render's `PORT` value (default `10000`); locally it falls back to port `8000`. Render requires a public web service to bind to `0.0.0.0:$PORT`. [Render web services](https://render.com/docs/web-services)
+6. Under **Advanced → Docker Command**, enter this to run migrations before starting the API:
+
+   ```sh
+   sh backend/start-api.sh
+   ```
+
+   The script runs migrations and starts Uvicorn only if they succeed. It is included in the backend image. This runs each time Render starts or restarts the API; `alembic upgrade head` is a no-op when the database is already current. Keep the API at one instance while using startup migrations; use a separate migration job before scaling to multiple API instances to avoid concurrent migrations.
+7. Deploy. The command binds Uvicorn to `0.0.0.0` and Render's `PORT` (normally `10000`). [Render web services](https://render.com/docs/web-services)
 
 Copy the public API URL after the service is live, for example `https://sandbox-api.onrender.com`. The frontend needs the `/api/v1` path appended.
 
