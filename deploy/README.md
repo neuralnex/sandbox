@@ -1,71 +1,98 @@
-# Deploy web and backend separately
+# Deploy Sandbox with Vercel and Render
 
-Sandbox has two independently deployable images. Build and deploy the web image from `web/`. Build the backend image from the repository root and run it as two services: the FastAPI API and the Celery worker. Both backend services use the same image and must be able to reach PostgreSQL and Redis. These instructions are provider-neutral; adapt the image, environment variable, port, and health check settings to your hosting platform.
+This setup hosts the Next.js frontend on Vercel and runs the FastAPI API plus Celery worker on Render. You build and push one backend image to Docker Hub, then select that image for two services in the Render dashboard. The API and worker need the same database, Redis, Firebase, and AI environment settings.
 
-## 1. Prepare the backend
+## 1. Publish the backend image
 
-Build and publish the backend image from the repository root:
-
-```sh
-docker build -f backend/Dockerfile -t YOUR_REGISTRY/sandbox-backend:latest .
-docker push YOUR_REGISTRY/sandbox-backend:latest
-```
-
-Create a backend runtime environment in your hosting provider. Set at least:
-
-- `APP_ENV=production`
-- `DATABASE_URL` to the production PostgreSQL connection string using the `postgresql+psycopg://` scheme
-- `REDIS_URL` to the production Redis connection string; use `rediss://` when the provider requires TLS
-- `CORS_ORIGINS` to a JSON array containing the exact web origin, for example `["https://sandbox.example.com"]`
-- `FIREBASE_PROJECT_ID` to the Firebase project ID
-- Firebase Admin credentials through the provider's secret manager as `FIREBASE_SERVICE_ACCOUNT_JSON`, or configure Application Default Credentials for the service
-- `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` only if AI drafting and run commentary should be enabled
-
-Never bake database passwords, Redis credentials, Firebase service-account keys, or OpenRouter keys into an image or build argument. `FIREBASE_WEB_API_KEY` is a browser client setting and is not a Firebase Admin credential.
-
-Before deploying a new backend version, run the migration command once as a release job using the same image and database environment:
+Create a Docker Hub repository for the backend. From the repository root, sign in to Docker Hub and build a `linux/amd64` image with a versioned tag:
 
 ```sh
-docker run --rm --env-file backend.production.env YOUR_REGISTRY/sandbox-backend:latest alembic upgrade head
+docker login
+docker buildx build --platform linux/amd64 \
+  -f backend/Dockerfile \
+  -t YOUR_DOCKERHUB_USERNAME/sandbox-backend:v1 \
+  --push .
 ```
 
-Then deploy two backend processes from that image:
+Use a new tag for each release, such as `v2` or a Git commit hash. Render image-backed services do not automatically redeploy when a tag changes; after pushing, use **Manual Deploy → Deploy latest reference** for both Render services. Render requires `linux/amd64` for prebuilt images. [Render prebuilt image guide](https://render.com/docs/deploying-an-image)
 
-```sh
-# API service; expose port 8000 and use GET /health as its HTTP health check.
-docker run --rm --env-file backend.production.env -p 8000:8000 YOUR_REGISTRY/sandbox-backend:latest
+## 2. Create the API service in Render
 
-# Worker service; do not expose a public port.
-docker run --rm --env-file backend.production.env YOUR_REGISTRY/sandbox-backend:latest celery -A backend.app.workers.celery_app:celery_app worker --loglevel=INFO
-```
+In the Render dashboard:
 
-In a managed container platform, set those commands in the API and worker service definitions instead of using `docker run`. Keep the worker running continuously so queued simulations can execute. The API readiness endpoint is `/health`; it currently confirms that the application process responds and does not check PostgreSQL, Redis, or Firebase connectivity.
+1. Choose **New → Web Service → Existing Image**.
+2. Enter `docker.io/YOUR_DOCKERHUB_USERNAME/sandbox-backend:v1`. Add Docker Hub credentials if the repository is private.
+3. Set a service name such as `sandbox-api`, choose a region, and select a plan.
+4. Set the health check path to `/health`.
+5. Add the API environment variables listed below.
+6. If the selected plan offers a **Pre-Deploy Command**, set it to `alembic upgrade head` so migrations run once before the API deploy. This must use the same `DATABASE_URL`. Render currently offers pre-deploy commands on paid web services. If your plan does not include that feature, run migrations once from a trusted environment that can reach the production database before deploying a schema change. [Render pre-deploy commands](https://render.com/docs/deploys)
+7. Deploy. The image command binds Uvicorn to `0.0.0.0` and uses Render's `PORT` value (default `10000`); locally it falls back to port `8000`. Render requires a public web service to bind to `0.0.0.0:$PORT`. [Render web services](https://render.com/docs/web-services)
 
-## 2. Prepare the web app
+Copy the public API URL after the service is live, for example `https://sandbox-api.onrender.com`. The frontend needs the `/api/v1` path appended.
 
-The browser needs the public HTTPS API URL and Firebase web app configuration at build time. Build from the `web/` directory:
+## 3. Create the worker service in Render
 
-```sh
-docker build -t YOUR_REGISTRY/sandbox-web:latest \
-  --build-arg NEXT_PUBLIC_API_URL=https://api.example.com/api/v1 \
-  --build-arg NEXT_PUBLIC_FIREBASE_API_KEY=YOUR_FIREBASE_WEB_API_KEY \
-  --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=YOUR_FIREBASE_AUTH_DOMAIN \
-  --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID=YOUR_FIREBASE_PROJECT_ID \
-  --build-arg NEXT_PUBLIC_FIREBASE_APP_ID=YOUR_FIREBASE_APP_ID \
-  .
-docker push YOUR_REGISTRY/sandbox-web:latest
-```
+1. Choose **New → Background Worker → Existing Image**.
+2. Use the exact same image and tag as the API service.
+3. Set the Docker command to:
 
-Run the web image on port 3000 and route your web hostname to it. `NEXT_PUBLIC_*` values are embedded in browser JavaScript; changing them requires rebuilding the web image. Do not pass private credentials as build arguments.
+   ```sh
+   celery -A backend.app.workers.celery_app:celery_app worker --loglevel=INFO
+   ```
 
-## 3. Finish provider configuration
+4. Add the same runtime environment variables as the API service, especially `DATABASE_URL` and `REDIS_URL`.
+5. Deploy. A background worker does not need a public port or health check.
 
-1. Add the deployed web hostname in Firebase Authentication's authorized domains and enable the sign-in providers you use.
-2. Set backend `CORS_ORIGINS` to the web origin, including its scheme and no path, such as `https://sandbox.example.com`.
-3. Make sure the web container can serve HTTPS traffic and that browsers can reach the API hostname over HTTPS.
-4. Configure persistent, backed-up PostgreSQL storage and managed Redis. Keep the backend and worker in a private network where possible.
-5. Confirm the API health check passes, a user can sign in, and a simulation can be queued and completed before inviting users.
+Keep this worker running continuously. The API accepts simulation jobs and the worker executes them. Updating an image-backed service requires a manual deploy after publishing a new image.
 
-## Model and data readiness
+## 4. Configure Render environment variables
 
-The three implemented engines remain simplified queueing, inventory, and Monte Carlo models. Industry starter prompts are framing aids, not calibrated sector models. The World Bank Data360 connector searches indicators, fetches observations, and saves them with source and attribution metadata in an environment; report exports include that source context. Data360 observations are not consumed by the simulation engines. Verify indicator-level reuse terms because third-party indicators may have different terms from Data360's default CC BY 4.0. There is no 3D or geospatial simulation. Sandbox is appropriate for a limited product alpha that gathers usability feedback; do not present results as operational forecasts until a selected domain has business-level validation data, model assumptions, and calibration evidence.
+Set `APP_ENV`, `DATABASE_URL`, and `REDIS_URL` on **both** the API and worker. Set the remaining variables on the API service:
+
+| Variable | Value |
+| --- | --- |
+| `APP_ENV` | `production` |
+| `DATABASE_URL` | Production PostgreSQL URL using `postgresql+psycopg://...`; URL-encode special characters in credentials. |
+| `REDIS_URL` | Production Redis URL. Use `rediss://` when the provider requires TLS. |
+| `CORS_ORIGINS` (API) | JSON string of exact browser origins, e.g. `["https://your-app.vercel.app"]`. Add your custom domain origin too, with no trailing slash or path. |
+| `FIREBASE_PROJECT_ID` (API) | Firebase project ID. |
+| `FIREBASE_WEB_API_KEY` (API) | Firebase web API key. The API uses it for Firebase email/password auth flows. |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` (API) | Firebase Admin service-account JSON stored as a secret. Do not put this in Vercel or commit it. Alternatively configure ADC in the container. |
+| `OPENROUTER_API_KEY` (API, optional) | Secret for AI draft and commentary features. |
+| `OPENROUTER_MODEL` (API, optional) | Model identifier; set with the key to enable OpenRouter features. |
+
+`DATABASE_URL` and `REDIS_URL` should point to managed, persistent services reachable from Render. They can be Render resources or your existing providers. The local Compose URLs that use `localhost` are not suitable for deployed services. Avoid placing credentials in Docker build arguments or image layers.
+
+## 5. Deploy the frontend to Vercel
+
+1. Import this repository into Vercel.
+2. Set the project **Root Directory** to `web`.
+3. Add these environment variables for Production (and Preview if desired):
+
+   | Variable | Value |
+   | --- | --- |
+   | `NEXT_PUBLIC_API_URL` | `https://YOUR-RENDER-API.onrender.com/api/v1` |
+   | `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase web API key |
+   | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase auth domain, usually `YOUR_PROJECT_ID.firebaseapp.com` |
+   | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID |
+   | `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase web app ID |
+
+4. Deploy the project. If an environment variable changes later, redeploy so the new value is included in the deployment. [Vercel environment variables](https://vercel.com/docs/environment-variables/managing-environment-variables)
+
+These `NEXT_PUBLIC_*` settings are client-side Firebase configuration and the public API address. Never put Firebase Admin credentials, database URLs, Redis passwords, or OpenRouter keys in Vercel's `NEXT_PUBLIC_*` variables.
+
+## 6. Finish Firebase and domain setup
+
+- In Firebase Authentication, enable Email/Password and Google. GitHub sign-in is disabled in the app until you configure it.
+- Add the deployed Vercel hostname and any custom frontend domain under Firebase Authentication's authorized domains.
+- Set Render `CORS_ORIGINS` to those same exact frontend origins, serialized as a JSON array.
+- If you later enable GitHub sign-in, create a GitHub OAuth app, enable the GitHub provider in Firebase Authentication, enter its client ID and secret, and set Firebase's OAuth redirect URI as the GitHub callback URL. [Firebase GitHub provider setup](https://firebase.google.com/docs/auth/web/github-auth)
+- Confirm the Vercel deployment can reach `https://YOUR-RENDER-API.onrender.com/health`, sign in with Google or email/password, and queue a simulation that the worker completes.
+
+## Local Docker workflow
+
+For local development, continue using the Compose setup described in [Development](../docs/DEVELOPMENT.md). Compose supplies local PostgreSQL and Redis and overrides the API command to run migrations and listen on port `8000`.
+
+## Product limits
+
+The queueing, inventory, and Monte Carlo engines still use simplified assumptions. The Data360 connector saves source records and observations for context; it does not calibrate simulation inputs. See the product [README](../README.md) for the model and data limits.

@@ -80,11 +80,11 @@ The interface includes 2D charts and scenario comparisons. It does not currently
 
 ## Get started
 
-For the local development setup, Firebase configuration, Docker workflow, and API overview, see [Development guide](docs/DEVELOPMENT.md). For separate web and backend deployment, see [Deployment guide](deploy/README.md).
+For the local development setup, Firebase configuration, Docker workflow, and API overview, see [Development guide](docs/DEVELOPMENT.md). For the Vercel frontend and Render API/worker deployment, see [Deployment guide](deploy/README.md).
 
 ### Sign-in providers
 
-Firebase Authentication supports email and password, Google, and GitHub sign-in. OpenRouter-powered drafting is optional; experiments can be configured and run without AI credentials.
+Firebase Authentication supports email and password and Google sign-in. GitHub sign-in is currently disabled in the interface until its Firebase provider and GitHub OAuth app are configured. OpenRouter-powered drafting is optional; experiments can be configured and run without AI credentials.
 
 ## Technology
 

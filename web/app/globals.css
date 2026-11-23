@@ -16,8 +16,8 @@
   --color-warning: var(--warning);
   --color-destructive: var(--destructive);
   --color-ring: var(--ring);
-  --font-sans: Arial, Helvetica, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
 :root {
@@ -60,7 +60,7 @@
 
 * { box-sizing: border-box; }
 html { min-height: 100%; background: var(--background); }
-body { margin: 0; max-width: 100%; overflow-x: hidden; background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; }
+body { margin: 0; max-width: 100%; overflow-x: hidden; background: var(--background); color: var(--foreground); font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif; }
 button, input, textarea, select { font: inherit; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 ::selection { background: #b9d5c4; color: #173324; }
@@ -151,4 +151,184 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 @media (prefers-reduced-motion: reduce) {
   .glass-control, .glass-icon, .glass-button, .glass-primary { transition: none; }
+}
+
+/* A founder's research studio: warm paper, quiet structure, and the existing
+   Sandbox pink/teal accents. The dot field is a low-contrast texture, not data. */
+.studio-shell { background: var(--background); }
+.studio-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  border-right-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+.studio-sidebar > div:first-child {
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+.studio-nav button {
+  min-height: 2.75rem;
+  border-radius: 0.9rem;
+  transition: background-color 100ms ease-out, color 100ms ease-out, transform 100ms ease-out;
+}
+.studio-nav button:active { transform: scale(0.985); }
+.studio-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+  background: color-mix(in srgb, var(--background) 90%, transparent);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+.studio-canvas {
+  position: relative;
+  isolation: isolate;
+  min-height: calc(100vh - 4rem);
+  background-image: radial-gradient(color-mix(in srgb, var(--foreground) 10%, transparent) 0.65px, transparent 0.65px);
+  background-size: 22px 22px;
+}
+.studio-dashboard { min-width: 0; }
+.dashboard-intro {
+  position: relative;
+  isolation: isolate;
+  min-height: 13rem;
+  overflow: hidden;
+  padding: clamp(1.5rem, 4vw, 2.75rem);
+  border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
+  border-radius: 1.75rem;
+  background: color-mix(in srgb, var(--card) 94%, var(--background));
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+.dashboard-intro::after {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  right: clamp(1rem, 8vw, 7rem);
+  width: 15rem;
+  height: 15rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 36%, transparent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5rem color-mix(in srgb, var(--primary) 7%, transparent), 0 0 0 3rem color-mix(in srgb, var(--secondary) 7%, transparent);
+  content: "";
+  opacity: 0.75;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.dashboard-intro-copy, .dashboard-actions { position: relative; z-index: 1; }
+.dashboard-intro h1, .studio-welcome h1 {
+  font-family: inherit;
+  font-weight: 800;
+  letter-spacing: -0.055em;
+}
+.dashboard-intro h1 { max-width: 19ch; font-size: clamp(2.3rem, 4.2vw, 3.4rem); line-height: 1.02; }
+.dashboard-actions { padding: 0.5rem; border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent); border-radius: 1.1rem; background: color-mix(in srgb, var(--background) 80%, transparent); }
+.dashboard-actions button { min-height: 2.75rem; border-radius: 999px; box-shadow: 0 5px 16px color-mix(in srgb, var(--primary) 18%, transparent); }
+.dashboard-actions input { border-radius: 0.75rem; }
+.metric-grid { gap: 0.875rem; }
+.metric-tile {
+  position: relative;
+  overflow: hidden;
+  min-height: 8.5rem;
+  padding: 1.25rem;
+  border-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+  border-radius: 1.35rem;
+  background: color-mix(in srgb, var(--card) 96%, var(--background));
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 4%, transparent);
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+}
+.metric-tile::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--secondary); content: ""; }
+.metric-tile:nth-child(even)::before { background: var(--primary); }
+.metric-tile p:first-child { font-size: 0.7rem; letter-spacing: 0.12em; }
+.metric-tile p:nth-child(2) { margin-top: 1rem; font-size: 1.8rem; }
+.dashboard-grid > .workbench-panel,
+.dashboard-grid > aside > .result-panel,
+.dashboard-grid > aside > .history-panel {
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+  border-radius: 1.5rem;
+  background: color-mix(in srgb, var(--card) 97%, var(--background));
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.dashboard-grid > aside { min-width: 0; }
+.dashboard-grid > aside > .result-panel { border-top: 3px solid var(--secondary); }
+.dashboard-grid > aside > .history-panel { border-top: 3px solid var(--primary); }
+.workbench-panel > div:first-child,
+.result-panel > div:first-child,
+.history-panel > div:first-child { background: color-mix(in srgb, var(--muted) 48%, var(--card)); }
+.studio-welcome {
+  overflow: hidden;
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 1.75rem;
+  background: var(--card);
+  box-shadow: 0 20px 55px color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+.studio-welcome > div > div { border-color: color-mix(in srgb, var(--foreground) 11%, transparent); border-radius: 1rem; background: color-mix(in srgb, var(--background) 70%, var(--card)); }
+.studio-welcome button { min-height: 3rem; border-radius: 999px; }
+.studio-shell [class~="border-border"] { border-color: color-mix(in srgb, var(--foreground) 13%, transparent); }
+.studio-shell button { transition: transform 100ms ease-out, background-color 100ms ease-out, color 100ms ease-out; }
+.studio-shell button:active:not(:disabled) { transform: scale(0.985); }
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .studio-nav button:hover { transform: translateX(2px); }
+  .metric-tile:hover { transform: translateY(-2px); box-shadow: 0 14px 32px color-mix(in srgb, var(--foreground) 8%, transparent); }
+}
+@media (max-width: 639px) {
+  .dashboard-intro { min-height: 0; padding: 1.35rem; }
+  .dashboard-intro::after { right: -7rem; width: 12rem; height: 12rem; opacity: 0.45; }
+  .dashboard-actions { width: 100%; }
+  .studio-canvas { padding-top: 1.25rem; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .studio-topbar, .dashboard-actions { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .studio-topbar { background: var(--background); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-shell button, .studio-nav button, .metric-tile { transition: none; }
+}
+
+/* SD Scout makes long waits and empty results feel guided, without turning
+   routine content into a constant animation. */
+.sandbox-mascot { display: inline-grid; flex: none; place-items: center; color: var(--foreground); }
+.sandbox-mascot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.mascot-small { width: 3.5rem; height: 3.5rem; }
+.mascot-medium { width: 6.5rem; height: 6.5rem; }
+.mascot-large { width: 9rem; height: 9rem; }
+.mascot-orbit { opacity: .36; }
+.mascot-antenna { opacity: .7; }
+.mascot-signal { transform-box: fill-box; transform-origin: center; }
+.mascot-working .mascot-signal { animation: mascot-signal 1.8s ease-in-out infinite; }
+.mascot-working .mascot-orbit { animation: mascot-orbit 2.4s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+.mascot-working .mascot-spark { animation: mascot-twinkle 1.8s ease-in-out infinite; transform-origin: 127px 53px; }
+.mascot-ready .mascot-signal { animation: mascot-pop 400ms cubic-bezier(.2,.75,.25,1) both; }
+.mascot-eyes { transform-box: fill-box; transform-origin: center; animation: mascot-blink 5.5s ease-in-out infinite; }
+.boot-splash { display: grid; min-height: 100svh; place-items: center; overflow: hidden; padding: 1.5rem; }
+.boot-card { position: relative; display: flex; width: min(100%, 34rem); min-height: 24rem; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent); border-radius: 2rem; background: color-mix(in srgb, var(--card) 90%, transparent); padding: clamp(1.5rem, 5vw, 3rem); text-align: center; box-shadow: 0 24px 70px color-mix(in srgb, var(--foreground) 9%, transparent); }
+.boot-card::before { position: absolute; top: -9rem; left: 50%; width: 18rem; height: 18rem; border: 1px solid color-mix(in srgb, var(--primary) 34%, transparent); border-radius: 50%; box-shadow: 0 0 0 1.5rem color-mix(in srgb, var(--primary) 6%, transparent), 0 0 0 3rem color-mix(in srgb, var(--secondary) 5%, transparent); content: ""; opacity: .8; transform: translateX(-50%); pointer-events: none; }
+.boot-card > * { position: relative; }
+.boot-card .sandbox-mascot { margin-bottom: 1.25rem; }
+.boot-lines { display: grid; width: min(100%, 17rem); gap: .5rem; margin-top: 1.5rem; }
+.boot-lines span { height: .5rem; border-radius: 999px; background: var(--muted); animation: boot-breathe 1.8s ease-in-out infinite alternate; }
+.boot-lines span:nth-child(2) { width: 74%; margin-inline: auto; animation-delay: 180ms; }
+.boot-lines span:nth-child(3) { width: 46%; margin-inline: auto; animation-delay: 360ms; }
+.state-mascot { display: flex; flex-direction: column; align-items: center; gap: .75rem; padding: 1.5rem; text-align: center; }
+.state-mascot .sandbox-mascot { margin-bottom: .15rem; }
+.question-set-progress { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .35rem; }
+.question-set-progress span { height: .25rem; border-radius: 999px; background: color-mix(in srgb, var(--foreground) 12%, transparent); }
+.question-set-progress span.is-complete { background: var(--secondary); }
+.question-set-progress span.is-current { background: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 22%, transparent); }
+.state-card { border-radius: 1.5rem; }
+
+@keyframes mascot-signal { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.24); } }
+@keyframes mascot-orbit { to { opacity: .58; transform: scale(1.025); } }
+@keyframes mascot-twinkle { 0%, 100% { opacity: .45; transform: scale(.85) rotate(-8deg); } 50% { opacity: 1; transform: scale(1.12) rotate(8deg); } }
+@keyframes mascot-pop { from { transform: scale(.4); } to { transform: scale(1); } }
+@keyframes mascot-blink { 0%, 46%, 50%, 100% { transform: scaleY(1); } 48% { transform: scaleY(.1); } }
+@keyframes boot-breathe { from { opacity: .45; transform: scaleX(.96); } to { opacity: .9; transform: scaleX(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-working .mascot-signal, .mascot-working .mascot-orbit, .mascot-working .mascot-spark,
+  .mascot-ready .mascot-signal, .mascot-eyes, .boot-lines span { animation: none; }
 }

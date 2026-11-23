@@ -11,5 +11,5 @@ RUN pip install --no-cache-dir --retries 10 --timeout 60 .
 COPY alembic.ini ./
 COPY migrations ./migrations
 
-EXPOSE 8000
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8000 10000
+CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
