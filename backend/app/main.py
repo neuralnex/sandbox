@@ -16,6 +16,7 @@ from backend.app.api.routes import (
     scenarios,
     simulations,
     users,
+    waitlist,
 )
 from backend.app.core.config import settings
 
@@ -45,6 +46,7 @@ app.include_router(scenarios.router, prefix=settings.api_v1_prefix)
 app.include_router(simulations.router, prefix=settings.api_v1_prefix)
 app.include_router(environments.router, prefix=settings.api_v1_prefix)
 app.include_router(reports.router, prefix=settings.api_v1_prefix)
+app.include_router(waitlist.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health", tags=["system"])

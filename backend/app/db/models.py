@@ -19,6 +19,15 @@ class User(Base, TimestampMixin):
     email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)
 
 
+class WaitlistSignup(Base):
+    __tablename__ = "waitlist_signups"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    source: Mapped[str] = mapped_column(String(80), default="landing_page")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class Organization(Base):
     __tablename__ = "organizations"
 

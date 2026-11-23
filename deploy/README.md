@@ -46,6 +46,7 @@ Set these variables on the single Render web service:
 | `DATABASE_URL` | Production PostgreSQL URL using `postgresql+psycopg://...`; URL-encode special characters in credentials. |
 | `REDIS_URL` | Production Redis URL. Use `rediss://` when the provider requires TLS. |
 | `CORS_ORIGINS` (API) | JSON string of exact browser origins, e.g. `["https://your-app.vercel.app"]`. Add your custom domain origin too, with no trailing slash or path. |
+| `WAITLIST_ADMIN_EMAILS` (API) | JSON list of Sandbox account emails allowed to view waitlist entries, e.g. `["you@example.com"]`. Only those signed-in accounts see the Waitlist panel in `/studio`. |
 | `FIREBASE_PROJECT_ID` (API) | Firebase project ID. |
 | `FIREBASE_WEB_API_KEY` (API) | Firebase web API key. The API uses it for Firebase email/password auth flows. |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` (API) | Firebase Admin service-account JSON stored as a secret. Do not put this in Vercel or commit it. Alternatively configure ADC in the container. |

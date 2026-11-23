@@ -3,7 +3,7 @@
 import {
   Github, ArrowDownToLine, ArrowUpRight, Beaker, Check, ChevronDown,
   CircleHelp, Database, FlaskConical, LoaderCircle, LogOut, MapPin, Moon,
-  Play, Plus, RefreshCw, Settings2, Sparkles, Sun, X,
+  Play, Plus, RefreshCw, Settings2, Sparkles, Sun, Users, X,
 } from "lucide-react";
 import {
   GoogleAuthProvider, User as FirebaseUser,
@@ -20,6 +20,7 @@ import { SandboxMascot } from "@/components/sandbox-mascot";
 const SESSION_KEY = "sandbox.api-session";
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 const profileSyncs = new Map<string, Promise<User>>();
+type WaitlistAdminResponse = { total: number; limit: number; offset: number; entries: { email: string; source: string; created_at: string }[] };
 const DISCOVERY_QUESTIONS = [
   { section: "Idea & problem", question: "What do you want to build?", hint: "Describe the product or service as you imagine it today.", placeholder: "A rough idea is enough. What should it help people do?" },
   { section: "Idea & problem", question: "What frustrating problem or unmet need should it solve?", hint: "Think about what is difficult, slow, expensive, risky, or missing today.", placeholder: "Who experiences the problem, and what happens?" },
@@ -257,6 +258,10 @@ export default function Home() {
   const [showNew, setShowNew] = useState(false);
   const [showBranch, setShowBranch] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [waitlistAdminAccess, setWaitlistAdminAccess] = useState(false);
+  const [waitlistAdminLoading, setWaitlistAdminLoading] = useState(false);
+  const [waitlistAdminError, setWaitlistAdminError] = useState("");
+  const [waitlistAdminData, setWaitlistAdminData] = useState<WaitlistAdminResponse | null>(null);
 
   const [title, setTitle] = useState("");
   const [idea, setIdea] = useState("");
@@ -362,6 +367,9 @@ export default function Home() {
       setEnvironments(environmentRows);
       setEnvironmentForExperiment((previous) => environmentRows.some((item) => item.id === previous) ? previous : "");
       setActiveId((previous) => experimentRows.some((item) => item.id === previous) ? previous : experimentRows[0]?.id || "");
+      void api<WaitlistAdminResponse>("/waitlist/admin?limit=1", accessToken)
+        .then(() => { if (requestId === workspaceLoadId.current) setWaitlistAdminAccess(true); })
+        .catch(() => { if (requestId === workspaceLoadId.current) setWaitlistAdminAccess(false); });
     } catch (cause) {
       if (requestId === workspaceLoadId.current) setError(explainError(cause));
       throw cause;
@@ -369,6 +377,20 @@ export default function Home() {
       if (requestId === workspaceLoadId.current) setLoading(false);
     }
   }, []);
+
+  async function loadWaitlistAdmin(offset = 0) {
+    setWaitlistAdminLoading(true);
+    setWaitlistAdminError("");
+    try {
+      const data = await api<WaitlistAdminResponse>(`/waitlist/admin?limit=50&offset=${offset}`, getToken);
+      setWaitlistAdminAccess(true);
+      setWaitlistAdminData(data);
+    } catch (cause) {
+      setWaitlistAdminError(explainError(cause));
+    } finally {
+      setWaitlistAdminLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -430,7 +452,7 @@ export default function Home() {
   async function logout() {
     workspaceLoadId.current += 1;
     try { if (firebaseUser) await signOut(getFirebaseAuth()); } catch { /* Clear the local API session even if the SDK is unavailable. */ }
-    sessionStorage.removeItem(SESSION_KEY); setSession(null); setFirebaseUser(null); setToken(""); setUser(null); setExperiments([]); setActiveId("");
+    sessionStorage.removeItem(SESSION_KEY); setSession(null); setFirebaseUser(null); setToken(""); setUser(null); setExperiments([]); setActiveId(""); setWaitlistAdminAccess(false); setWaitlistAdminData(null);
   }
 
   function discoveryTranscript(answers: Record<number, string> = clarificationAnswers, firstAnswer: string = idea) {
@@ -709,6 +731,7 @@ export default function Home() {
         <a href="#experiments" className="flex min-h-11 items-center gap-3 border-l-2 border-primary bg-accent px-3 text-sm font-bold"><FlaskConical size={16} aria-hidden="true" />Explorations</a>
         <a href="#environment" className="flex min-h-11 items-center gap-3 px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"><Database size={16} aria-hidden="true" />Environments</a>
         <a href="#reports" className="flex min-h-11 items-center gap-3 px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"><ArrowDownToLine size={16} aria-hidden="true" />Reports</a>
+        {waitlistAdminAccess && <a href="#waitlist-admin" onClick={() => void loadWaitlistAdmin(0)} className="flex min-h-11 items-center gap-3 px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"><Users size={16} aria-hidden="true" />Waitlist</a>}
         <div className="sidebar-content">
           <section className="sidebar-explorations">
             <div className="flex shrink-0 items-center justify-between"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your explorations</p><button type="button" onClick={startNewExploration} aria-label="Start an exploration" className="grid size-10 shrink-0 place-items-center hover:bg-muted"><Plus size={17} aria-hidden="true" /></button></div>
@@ -731,12 +754,13 @@ export default function Home() {
         <header className="studio-topbar flex min-h-16 items-center justify-between border-b border-border bg-background px-4 sm:px-6 lg:px-9">
           <div className="flex min-w-0 items-center gap-2 md:hidden"><Logo small /><span className="font-bold">Sandbox</span><button type="button" onClick={() => setWorkspaceSettingsOpen((open) => !open)} aria-label="Workspace settings" aria-expanded={workspaceSettingsOpen} className="grid size-10 shrink-0 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground"><MapPin size={17} aria-hidden="true" /></button>{experiments.length > 0 && <select aria-label="Select experiment" value={activeId} onChange={(event) => { setShowNew(false); setSelectedRunId(""); setActiveId(event.target.value); setComparison(null); }} className="min-h-10 min-w-0 max-w-36 border border-border bg-card px-2 text-xs font-semibold sm:max-w-56">{experiments.map((experiment) => <option key={experiment.id} value={experiment.id}>{experiment.title}</option>)}</select>}</div>
           <div className="hidden min-w-0 items-center gap-2 text-xs text-muted-foreground md:flex"><span>Workspace</span><span aria-hidden="true">/</span><span className="shrink-0 font-semibold text-foreground">Explorations</span>{currentExperiment && <><span aria-hidden="true">/</span><span className="min-w-0 max-w-48 truncate font-semibold text-foreground">{currentExperiment.title}</span></>}</div>
-          <div className="flex items-center gap-2"><button type="button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} appearance`} className="grid size-10 place-items-center hover:bg-muted md:hidden">{theme === "light" ? <Moon size={17} aria-hidden="true" /> : <Sun size={17} aria-hidden="true" />}</button><button type="button" onClick={startNewExploration} className="flex min-h-10 items-center gap-2 border border-foreground bg-primary px-3 text-sm font-extrabold text-primary-foreground hover:brightness-95"><Plus size={16} aria-hidden="true" /><span className="hidden sm:inline">New exploration</span><span className="sm:hidden">New</span></button><button type="button" onClick={() => void logout()} aria-label="Sign out" className="grid size-10 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"><LogOut size={16} aria-hidden="true" /></button></div>
+          <div className="flex items-center gap-2">{waitlistAdminAccess && <a href="#waitlist-admin" onClick={() => void loadWaitlistAdmin(0)} className="flex min-h-10 items-center gap-2 rounded-full border border-border px-3 text-xs font-bold text-muted-foreground hover:bg-muted hover:text-foreground"><Users size={15} aria-hidden="true" /><span>Waitlist</span></a>}<button type="button" onClick={() => setTheme(theme === "light" ? "dark" : "light")} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} appearance`} className="grid size-10 place-items-center hover:bg-muted md:hidden">{theme === "light" ? <Moon size={17} aria-hidden="true" /> : <Sun size={17} aria-hidden="true" />}</button><button type="button" onClick={startNewExploration} className="flex min-h-10 items-center gap-2 border border-foreground bg-primary px-3 text-sm font-extrabold text-primary-foreground hover:brightness-95"><Plus size={16} aria-hidden="true" /><span className="hidden sm:inline">New exploration</span><span className="sm:hidden">New</span></button><button type="button" onClick={() => void logout()} aria-label="Sign out" className="grid size-10 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"><LogOut size={16} aria-hidden="true" /></button></div>
         </header>
 
         <div className="studio-canvas mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-9 lg:py-10">
           {!showNew && error && <div role="alert" className="mb-5 flex items-center gap-3 border border-destructive bg-card p-4 text-sm"><SandboxMascot mood="oops" size="small" /><span className="min-w-0 flex-1">{error}</span><div className="flex shrink-0 items-center gap-1">{token && <button type="button" onClick={() => void loadWorkspace(token).catch(() => undefined)} className="min-h-10 px-3 font-bold underline underline-offset-4">Retry</button>}<button type="button" onClick={() => setError("")} aria-label="Dismiss error" className="grid size-10 place-items-center hover:bg-muted"><X size={16} aria-hidden="true" /></button></div></div>}
           {!showNew && notice && <div role="status" className="mb-5 flex items-center justify-between gap-3 border border-secondary bg-accent p-4 text-sm"><span className="flex items-center gap-2"><Check size={16} aria-hidden="true" />{notice}</span><button type="button" onClick={() => setNotice("")} aria-label="Dismiss message" className="grid size-10 shrink-0 place-items-center hover:bg-muted"><X size={16} aria-hidden="true" /></button></div>}
+          {waitlistAdminAccess && <a href="#waitlist-admin" onClick={() => void loadWaitlistAdmin(0)} className="mb-5 inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-card px-4 text-xs font-bold text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"><Users size={15} aria-hidden="true" />Waitlist admin</a>}
 
           {workspaceSettingsOpen && !showNew && org && <section className="rise mb-8 border-2 border-foreground bg-card">
             <div className="border-b border-border p-5 sm:p-6"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Workspace profile</p><h2 className="mt-1 text-xl font-extrabold">Business context & location</h2><p className="mt-1 text-sm text-muted-foreground">Choose a sector and optionally add a business location to give experiment drafts useful context.</p></div>
@@ -887,6 +911,15 @@ export default function Home() {
             {latestRun?.status === "failed" && latestRun.error && <p role="alert" className="border border-destructive p-4 text-sm">Run failed: {latestRun.error}</p>}
           </div>)}
         </div>
+        {waitlistAdminAccess && <section id="waitlist-admin" className="mt-8 overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sandbox admin</p><h2 className="mt-1 text-lg font-extrabold">Waitlist signups</h2></div><button type="button" disabled={waitlistAdminLoading} onClick={() => void loadWaitlistAdmin(waitlistAdminData?.offset || 0)} className="flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-sm font-bold hover:bg-muted disabled:opacity-50"><RefreshCw size={15} className={waitlistAdminLoading ? "animate-spin" : ""} aria-hidden="true" />Refresh</button></div>
+          {waitlistAdminError && <p role="alert" className="m-4 rounded-xl border border-destructive p-3 text-sm">{waitlistAdminError}</p>}
+          {!waitlistAdminData && <div className="p-5"><p className="text-sm text-muted-foreground">Load the current count and latest signup emails.</p><button type="button" disabled={waitlistAdminLoading} onClick={() => void loadWaitlistAdmin(0)} className="mt-3 min-h-10 rounded-full bg-primary px-4 text-sm font-bold text-primary-foreground disabled:opacity-50">{waitlistAdminLoading ? "Loading…" : "Load waitlist"}</button></div>}
+          {waitlistAdminData && <><div className="flex flex-wrap items-baseline gap-2 border-b border-border bg-muted/50 px-5 py-4"><strong className="font-mono text-3xl tabular-nums">{waitlistAdminData.total.toLocaleString()}</strong><span className="text-sm text-muted-foreground">total signups</span><span className="ml-auto text-xs text-muted-foreground">Showing {waitlistAdminData.entries.length ? waitlistAdminData.offset + 1 : 0}–{waitlistAdminData.offset + waitlistAdminData.entries.length}</span></div>
+            {waitlistAdminData.entries.length ? <div className="overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-sm"><thead className="text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-5 py-3 font-bold">Email</th><th className="px-5 py-3 font-bold">Joined</th><th className="px-5 py-3 font-bold">Source</th></tr></thead><tbody>{waitlistAdminData.entries.map((entry) => <tr key={`${entry.email}-${entry.created_at}`} className="border-t border-border"><td className="px-5 py-3 font-medium">{entry.email}</td><td className="px-5 py-3 text-muted-foreground">{new Date(entry.created_at).toLocaleString()}</td><td className="px-5 py-3 text-muted-foreground">{entry.source}</td></tr>)}</tbody></table></div> : <p className="p-5 text-sm text-muted-foreground">No signups yet. New waitlist entries will appear here.</p>}
+            <div className="flex justify-between border-t border-border p-4"><button type="button" disabled={waitlistAdminLoading || waitlistAdminData.offset === 0} onClick={() => void loadWaitlistAdmin(Math.max(0, waitlistAdminData.offset - waitlistAdminData.limit))} className="min-h-10 rounded-full border border-border px-4 text-sm font-bold disabled:opacity-40">Previous</button><button type="button" disabled={waitlistAdminLoading || waitlistAdminData.offset + waitlistAdminData.limit >= waitlistAdminData.total} onClick={() => void loadWaitlistAdmin(waitlistAdminData.offset + waitlistAdminData.limit)} className="min-h-10 rounded-full border border-border px-4 text-sm font-bold disabled:opacity-40">Next</button></div>
+          </>}
+        </section>}
       </section>
     </div>
   </main>;

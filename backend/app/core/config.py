@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     simulation_max_runtime_seconds: int = Field(default=600, gt=0)
     cors_origins: list[str] = ["http://localhost:3000"]
+    waitlist_admin_emails: list[str] = []
 
     firebase_project_id: str | None = None
     firebase_web_api_key: SecretStr | None = None
