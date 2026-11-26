@@ -114,6 +114,7 @@ def start_run(
         engine_version=engine.version,
         seed=seed,
         config=config,
+        context=scenario.context or {},
         status="queued",
         progress=0,
         created_by_id=user.id,

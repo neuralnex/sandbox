@@ -45,7 +45,7 @@ def _web_results(payload: dict) -> list[dict]:
 
 
 async def search_idea(
-    idea: str, *, geography: str | None = None, limit: int = 8
+    idea: str, *, geography: str | None = None, limit: int = 8, focus: str | None = None
 ) -> list[dict[str, str | None]]:
     """Search the live web through Firecrawl and return compact cited evidence."""
     if not settings.firecrawl_api_key or not settings.firecrawl_api_key.get_secret_value():
@@ -54,8 +54,9 @@ async def search_idea(
     query = " ".join(idea.split())[:340]
     if geography and geography.strip().lower() not in {"not sure yet", "unknown", "online", "global"}:
         query += f" launch market {geography.strip()[:120]}"
+    research_focus = focus or "market size buyer demand alternatives pricing and adoption evidence"
     body: dict = {
-        "query": f"{query} market evidence competitors customer demand pricing",
+        "query": f"{query} {research_focus}",
         "limit": min(max(limit, 1), 10),
         "sources": [{"type": "web"}],
         "scrapeOptions": {"formats": [{"type": "markdown"}]},

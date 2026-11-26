@@ -516,6 +516,59 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .question-set-progress span.is-current { background: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 22%, transparent); }
 .state-card { border-radius: 1.5rem; }
 
+.research-scene {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 1.75rem;
+  background: color-mix(in srgb, var(--card) 92%, var(--background));
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+.research-scene-top { display: flex; min-height: 3.25rem; align-items: center; gap: .65rem; padding: .75rem 1.25rem; border-bottom: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent); color: var(--muted-foreground); font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.research-live-dot { width: .55rem; height: .55rem; flex: none; border-radius: 50%; background: var(--secondary); box-shadow: 0 0 0 .25rem color-mix(in srgb, var(--secondary) 15%, transparent); }
+.research-top-rule { height: 1px; flex: 1; margin-left: .5rem; background: color-mix(in srgb, var(--foreground) 10%, transparent); }
+.research-scene-grid { display: grid; min-width: 0; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: center; gap: clamp(1.25rem, 4vw, 3rem); padding: clamp(1rem, 3vw, 2rem); }
+.research-character-stage { position: relative; display: grid; min-height: 17rem; place-items: center; isolation: isolate; }
+.research-character-stage::before { position: absolute; z-index: -1; width: 11rem; height: 11rem; border-radius: 50%; background: color-mix(in srgb, var(--primary) 17%, transparent); content: ""; filter: blur(20px); }
+.research-mascot-rotator { display: grid; width: 10rem; height: 10rem; place-items: center; animation: research-mascot-turn 22s linear infinite; }
+.research-mascot-rotator .sandbox-mascot { filter: drop-shadow(0 12px 10px color-mix(in srgb, var(--foreground) 12%, transparent)); }
+.research-orbit { position: absolute; z-index: -1; width: 13rem; height: 6rem; border: 1px solid color-mix(in srgb, var(--secondary) 45%, transparent); border-radius: 50%; transform: rotate(-30deg); }
+.research-orbit-two { width: 14rem; height: 8rem; border-color: color-mix(in srgb, var(--primary) 50%, transparent); transform: rotate(42deg); }
+.research-spark { position: absolute; color: var(--secondary); font-size: 1.45rem; animation: research-twinkle 2.4s ease-in-out infinite alternate; }
+.research-spark-one { top: 22%; right: 22%; }
+.research-spark-two { bottom: 21%; left: 20%; color: var(--primary); animation-delay: 450ms; }
+.research-quip { position: absolute; right: 0; bottom: .25rem; left: 0; width: fit-content; max-width: 90%; margin-inline: auto; border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent); border-radius: 999px; background: var(--card); padding: .65rem 1rem; box-shadow: 0 8px 20px color-mix(in srgb, var(--foreground) 8%, transparent); font-size: .9rem; font-weight: 800; text-align: center; animation: research-quip-in 220ms cubic-bezier(.2,.75,.25,1) both; }
+.research-context { display: flex; min-width: 0; flex-direction: column; gap: 1rem; padding-block: .5rem; }
+.research-kicker { color: var(--secondary); font-size: .7rem; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+.research-context h3 { margin-top: .45rem; font-size: clamp(1.45rem, 2.4vw, 2rem); font-weight: 900; letter-spacing: -.045em; line-height: 1.1; }
+.research-caption { max-width: 36rem; margin-top: .65rem; color: var(--muted-foreground); font-size: .875rem; line-height: 1.65; }
+.research-idea-card { position: relative; max-height: 8rem; overflow: hidden; border-left: 3px solid var(--primary); border-radius: .25rem .9rem .9rem .25rem; background: color-mix(in srgb, var(--muted) 62%, var(--card)); padding: .8rem 1rem; }
+.research-idea-card p { display: -webkit-box; overflow: hidden; color: var(--foreground); font-size: .85rem; line-height: 1.55; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.research-card-mark { display: block; margin-bottom: .4rem; color: var(--muted-foreground); font-size: .62rem; font-weight: 900; letter-spacing: .13em; }
+.research-region { display: flex; min-width: 0; align-items: flex-start; gap: .55rem; color: var(--muted-foreground); font-size: .8rem; line-height: 1.45; }
+.research-region svg { flex: none; margin-top: .1rem; color: var(--secondary); }
+.research-region span { overflow-wrap: anywhere; }
+.research-footnote { display: flex; align-items: center; gap: .55rem; color: var(--muted-foreground); font-size: .75rem; }
+.research-pulse-bars { display: flex; height: 1rem; align-items: center; gap: .16rem; }
+.research-pulse-bars i { width: .2rem; height: .4rem; border-radius: 999px; background: var(--secondary); animation: research-bars 850ms ease-in-out infinite alternate; }
+.research-pulse-bars i:nth-child(2) { height: .75rem; animation-delay: 180ms; }
+.research-pulse-bars i:nth-child(3) { animation-delay: 360ms; }
+
+@media (max-width: 639px) {
+  .research-scene-grid { grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; }
+  .research-character-stage { min-height: 13.5rem; }
+  .research-mascot-rotator { width: 8rem; height: 8rem; }
+  .research-orbit { width: 11rem; height: 5rem; }
+  .research-orbit-two { width: 12rem; height: 6.5rem; }
+  .research-quip { bottom: 0; }
+  .research-context { padding: .5rem .25rem .25rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes research-mascot-turn { to { transform: rotate(360deg); } }
+  @keyframes research-twinkle { from { opacity: .55; transform: scale(.86); } to { opacity: 1; transform: scale(1.15); } }
+  @keyframes research-quip-in { from { opacity: 0; transform: translateY(5px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes research-bars { to { transform: scaleY(.45); opacity: .6; } }
+}
+
 @keyframes mascot-signal { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.24); } }
 @keyframes mascot-orbit { to { opacity: .58; transform: scale(1.025); } }
 @keyframes mascot-twinkle { 0%, 100% { opacity: .45; transform: scale(.85) rotate(-8deg); } 50% { opacity: 1; transform: scale(1.12) rotate(8deg); } }
@@ -526,4 +579,5 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 @media (prefers-reduced-motion: reduce) {
   .mascot-working .mascot-signal, .mascot-working .mascot-orbit, .mascot-working .mascot-spark,
   .mascot-ready .mascot-signal, .mascot-eyes, .boot-lines span { animation: none; }
+  .research-mascot-rotator, .research-spark, .research-quip, .research-pulse-bars i { animation: none; }
 }

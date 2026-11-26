@@ -11,7 +11,7 @@ import {
   signInWithPopup, signOut,
 } from "firebase/auth";
 import { type FormEvent, type InputHTMLAttributes, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, API_URL, ApiSession, Dataset, Environment, Experiment, Interpretation, jsonBody, Organization, Project, Run, RunInterpretation, Scenario, User } from "@/lib/api";
+import { api, API_URL, ApiSession, Dataset, Environment, Experiment, IdeaDecisionBrief, Interpretation, jsonBody, Organization, Project, Run, RunInterpretation, Scenario, User } from "@/lib/api";
 import { getFirebaseAuth } from "@/lib/firebase";
 import { RunVisualizations } from "@/components/run-visualizations";
 import { SandboxMascot } from "@/components/sandbox-mascot";
@@ -20,30 +20,6 @@ const SESSION_KEY = "sandbox.api-session";
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 const profileSyncs = new Map<string, Promise<User>>();
 type WaitlistAdminResponse = { total: number; limit: number; offset: number; entries: { email: string; source: string; created_at: string }[] };
-const DISCOVERY_QUESTIONS = [
-  { section: "Idea & problem", question: "What do you want to build?", hint: "Describe the product or service as you imagine it today.", placeholder: "A rough idea is enough. What should it help people do?" },
-  { section: "Idea & problem", question: "What frustrating problem or unmet need should it solve?", hint: "Think about what is difficult, slow, expensive, risky, or missing today.", placeholder: "Who experiences the problem, and what happens?" },
-  { section: "Idea & problem", question: "Why does this feel important to solve now?", hint: "A change in technology, habits, costs, policy, or your own experience may have sparked it.", placeholder: "What made you start thinking about this idea?" },
-  { section: "People & market", question: "Who are the first people or organizations you most want to help?", hint: "Describe the people who would get the most value first.", placeholder: "What are they trying to accomplish, and what makes their situation specific?" },
-  { section: "People & market", question: "Who would use it, who would choose it, and who would pay?", hint: "Those roles can belong to different people or organizations.", placeholder: "For example, a team may use a product while a manager buys it." },
-  { section: "People & market", question: "Where do you want to launch and serve people first?", hint: "Include countries, cities, regions, or online markets. Your workspace location is not a substitute.", placeholder: "For example: developers in Nigeria first, then other African markets." },
-  { section: "Product & delivery", question: "What needs to be available for your product to deliver its promise?", hint: "For a marketplace, think about providers and offerings as well as customers.", placeholder: "Who or what needs to participate, and what might make providers or partners join?" },
-  { section: "Product & delivery", question: "Who will come to use or buy it, and what are they trying to get done?", hint: "If the product brings two sides together, describe what would bring buyers to it and back again.", placeholder: "What would a customer be looking for, and when would they need it?" },
-  { section: "Product & delivery", question: "How does someone go from finding your product to getting value from it?", hint: "For a marketplace, include provider discovery, comparison, trials, payment, and what happens after purchase.", placeholder: "Walk through the experience in everyday language." },
-  { section: "Value & competition", question: "What do your potential customers use or do today instead?", hint: "If your idea connects two sides, include what both sides use today. Workarounds and doing nothing count too.", placeholder: "Name any alternatives you know, or describe the current workaround." },
-  { section: "Value & competition", question: "Why might customers—and providers, if your product connects two sides—choose it over those alternatives?", hint: "Different people may value different things.", placeholder: "What should feel better for each person or organization involved?" },
-  { section: "Value & competition", question: "How should people judge whether an offering is a good fit?", hint: "Consider quality, price, speed, reliability, safety, compatibility, or transparency.", placeholder: "Which information or proof would help someone choose confidently?" },
-  { section: "Business model & reach", question: "How might the product earn money or stay funded?", hint: "A possible approach is enough; you do not need a forecast.", placeholder: "For example: usage fees, subscriptions, commissions, listing fees, or grants." },
-  { section: "Business model & reach", question: "What would feel fair for customers to pay and providers or partners to earn, if both are involved?", hint: "Think about pricing, payouts, and the platform's share without needing exact figures.", placeholder: "For example: transparent usage pricing, subscriptions, or a small commission." },
-  { section: "Business model & reach", question: "How might you reach your first customers and attract any providers or partners you need?", hint: "If the idea serves two sides, it may need to build both sides—perhaps starting with one focused niche.", placeholder: "Consider communities, partnerships, direct sales, or existing networks." },
-  { section: "Trust & operations", question: "What must people be able to trust before they use your product?", hint: "Consider privacy, security, payments, permissions, safety, quality, and accountability. For a marketplace, what proof should providers offer?", placeholder: "What could go wrong, and what protection or transparency would matter?" },
-  { section: "Trust & operations", question: "What needs to happen behind the scenes for the experience to work reliably?", hint: "Think about onboarding, evaluation, support, uptime, disputes, moderation, or integrations.", placeholder: "What will you need to do for customers and any partners after signup?" },
-  { section: "Trust & operations", question: "Are there local rules, access limits, or dependencies that could shape the product?", hint: "Consider regulation, language, connectivity, payment methods, partners, or infrastructure.", placeholder: "Which conditions might matter in your first market? It is fine not to know yet." },
-  { section: "Readiness & validation", question: "What have you done so far to learn whether people want this?", hint: "Conversations, waitlists, sketches, prototypes, tests, or no research yet all count.", placeholder: "What have you heard or observed from potential customers, users, or partners?" },
-  { section: "Readiness & validation", question: "What resources, timing, or constraints should Sandbox know about?", hint: "People, partners, skills, budget limits, access, or deadlines are useful context.", placeholder: "Share practical realities. Exact figures are not required." },
-  { section: "Readiness & validation", question: "What would early success look like, and what worries you most?", hint: "Describe a meaningful first signal and the biggest reason the idea might fail.", placeholder: "What would make you more confident? What could stop this from working?" },
-] as const;
-
 const statusCopy: Record<string, string> = {
   queued: "Queued", running: "Running", cancel_requested: "Stopping",
   completed: "Complete", failed: "Failed", cancelled: "Cancelled",
@@ -99,6 +75,40 @@ function MetricCard({ label, value, note }: { label: string; value: string; note
     <p className="mt-3 truncate font-mono text-2xl font-bold tabular-nums">{value}</p>
     <p className="mt-1 text-xs text-muted-foreground">{note}</p>
   </article>;
+}
+
+const researchQuips = [
+  "Hmm, looking at this…",
+  "Aha, a branch in the market…",
+  "Lemme grab a donut…",
+  "Almost there…",
+];
+
+function ResearchingIdea({ idea, region }: { idea: string; region: string }) {
+  const [quipIndex, setQuipIndex] = useState(0);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setInterval(() => setQuipIndex((index) => (index + 1) % researchQuips.length), 3000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return <div className="research-scene rise" role="status" aria-live="polite" aria-busy="true">
+    <div className="research-scene-top"><span className="research-live-dot" /><span>Sandbox is thinking</span><span className="research-top-rule" /></div>
+    <div className="research-scene-grid">
+      <div className="research-character-stage">
+        <div className="research-orbit research-orbit-one" /><div className="research-orbit research-orbit-two" />
+        <div className="research-mascot-rotator"><SandboxMascot mood="working" size="large" /></div>
+        <span className="research-spark research-spark-one">✳</span><span className="research-spark research-spark-two">✦</span>
+        <div key={quipIndex} className="research-quip">{researchQuips[quipIndex]}</div>
+      </div>
+      <div className="research-context">
+        <div><p className="research-kicker">Your starting point</p><h3>Let’s find the shape of it.</h3><p className="research-caption">We’re gathering context to make the decision brief useful, balanced, and grounded in what you shared.</p></div>
+        <div className="research-idea-card"><span className="research-card-mark">IDEA</span><p>{idea}</p></div>
+        {region.trim() && <div className="research-region"><MapPin size={15} aria-hidden="true" /><span>{region}</span></div>}
+        <div className="research-footnote"><span className="research-pulse-bars" aria-hidden="true"><i /><i /><i /></span><span>Finding the useful signal in the noise</span></div>
+      </div>
+    </div>
+  </div>;
 }
 
 function AuthScreen({ onReady }: { onReady: (token: string) => Promise<void> }) {
@@ -214,6 +224,8 @@ export default function Home() {
   const draftingRef = useRef(false);
   const interpretationRequests = useRef(new Set<string>());
   const [session, setSession] = useState<ApiSession | null>(null);
+  const [authInitialized, setAuthInitialized] = useState(false);
+  const restoredToken = useRef<string | null>(null);
   const [token, setToken] = useState("");
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
@@ -264,6 +276,10 @@ export default function Home() {
 
   const [title, setTitle] = useState("");
   const [idea, setIdea] = useState("");
+  const [targetRegion, setTargetRegion] = useState("");
+  const [researchConsent, setResearchConsent] = useState(false);
+  const [simulationOpen, setSimulationOpen] = useState(false);
+  const [whatIfQuestion, setWhatIfQuestion] = useState("");
   const [arrival, setArrival] = useState("");
   const [service, setService] = useState("");
   const [servers, setServers] = useState("");
@@ -274,14 +290,27 @@ export default function Home() {
   const [runSeed, setRunSeed] = useState("");
   const [domain, setDomain] = useState("general");
   const [aiDraft, setAiDraft] = useState<Interpretation | null>(null);
-  const [clarificationAnswers, setClarificationAnswers] = useState<Record<number, string>>({});
-  const [clarificationTranscript, setClarificationTranscript] = useState("");
-  const [questionDirection, setQuestionDirection] = useState<"next" | "previous">("next");
-  const [newStep, setNewStep] = useState(1);
   const [branchName, setBranchName] = useState("Higher arrivals");
   const [branchArrival, setBranchArrival] = useState("24");
 
   const currentExperiment = useMemo(() => experiments.find((experiment) => experiment.id === activeId) || null, [experiments, activeId]);
+  const savedDiscovery = currentExperiment?.specification.discovery as { decision_brief?: IdeaDecisionBrief; market_research?: Interpretation["market_research"] } | undefined;
+  // Discovery records created before all brief fields were required can contain
+  // null or missing arrays. Normalize persisted JSON before rendering it so an
+  // older exploration cannot crash the whole Studio route.
+  const rawSavedDecisionBrief = savedDiscovery?.decision_brief;
+  const savedDecisionBrief = rawSavedDecisionBrief ? {
+    ...rawSavedDecisionBrief,
+    assumptions: Array.isArray(rawSavedDecisionBrief.assumptions) ? rawSavedDecisionBrief.assumptions : [],
+    what_supports_it: Array.isArray(rawSavedDecisionBrief.what_supports_it) ? rawSavedDecisionBrief.what_supports_it : [],
+    what_makes_it_hard: Array.isArray(rawSavedDecisionBrief.what_makes_it_hard) ? rawSavedDecisionBrief.what_makes_it_hard : [],
+  } : undefined;
+  const savedMarketResearch = savedDiscovery?.market_research ? {
+    ...savedDiscovery.market_research,
+    assumptions: Array.isArray(savedDiscovery.market_research.assumptions) ? savedDiscovery.market_research.assumptions : [],
+    caveats: Array.isArray(savedDiscovery.market_research.caveats) ? savedDiscovery.market_research.caveats : [],
+    sources: Array.isArray(savedDiscovery.market_research.sources) ? savedDiscovery.market_research.sources : [],
+  } : undefined;
   const activeScenario = scenarios.find((scenario) => scenario.id === selectedScenario) || scenarios.find((scenario) => scenario.is_baseline) || null;
   const liveRuns = runs.some((run) => !TERMINAL.has(run.status));
 
@@ -299,9 +328,11 @@ export default function Home() {
         const previousUid = firebaseUid.current;
         firebaseUid.current = nextUser?.uid || null;
         setFirebaseUser(nextUser);
+        setAuthInitialized(true);
         const hasRestSession = Boolean(sessionStorage.getItem(SESSION_KEY));
         if ((previousUid && previousUid !== nextUser?.uid) || (nextUser && hasRestSession)) {
           workspaceLoadId.current += 1;
+          restoredToken.current = null;
           sessionStorage.removeItem(SESSION_KEY);
           setSession(null); setToken(""); setUser(null); setOrg(null); setProjects([]);
           setExperiments([]); setEnvironments([]); setScenarios([]); setRuns([]);
@@ -394,24 +425,33 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     async function restore() {
+      if (!authInitialized) return;
       if (firebaseUser) {
         try {
           const accessToken = await getIdToken(firebaseUser);
+          if (restoredToken.current === accessToken) return;
           await syncFirebaseProfile(accessToken, firebaseUser.uid);
-          if (!cancelled) { setToken(accessToken); await loadWorkspace(accessToken); }
+          if (!cancelled && restoredToken.current !== accessToken) {
+            restoredToken.current = accessToken;
+            setToken(accessToken); await loadWorkspace(accessToken);
+          }
         } catch { if (!cancelled) setLoading(false); }
       } else if (session) {
         try {
           const accessToken = await getToken();
+          if (restoredToken.current === accessToken) return;
           await api<User>("/auth/sync", accessToken, jsonBody({}));
-          if (!cancelled) { setToken(accessToken); await loadWorkspace(accessToken); }
+          if (!cancelled && restoredToken.current !== accessToken) {
+            restoredToken.current = accessToken;
+            setToken(accessToken); await loadWorkspace(accessToken);
+          }
         }
         catch { if (!cancelled) setLoading(false); }
       } else { setUser(null); setLoading(false); }
     }
     void restore();
     return () => { cancelled = true; };
-  }, [firebaseUser, session, getToken, loadWorkspace]);
+  }, [authInitialized, firebaseUser, session, getToken, loadWorkspace]);
 
   useEffect(() => {
     if (!token || !currentExperiment) { setScenarios([]); setRuns([]); return; }
@@ -445,29 +485,23 @@ export default function Home() {
   }, [token, autoReviewRun?.id, getToken]);
 
   async function ready(accessToken: string) {
+    restoredToken.current = accessToken;
     setToken(accessToken); await loadWorkspace(accessToken);
   }
 
   async function logout() {
     workspaceLoadId.current += 1;
+    restoredToken.current = null;
     try { if (firebaseUser) await signOut(getFirebaseAuth()); } catch { /* Clear the local API session even if the SDK is unavailable. */ }
     sessionStorage.removeItem(SESSION_KEY); setSession(null); setFirebaseUser(null); setToken(""); setUser(null); setExperiments([]); setActiveId(""); setWaitlistAdminAccess(false); setWaitlistAdminData(null);
   }
 
-  function discoveryTranscript(answers: Record<number, string> = clarificationAnswers, firstAnswer: string = idea) {
-    return DISCOVERY_QUESTIONS.map((item, index) => {
-      const questionNumber = index + 1;
-      const answer = questionNumber === 1 ? firstAnswer : answers[questionNumber];
-      return `${questionNumber}. ${item.question}\nFounder answer: ${answer?.trim() || "Not sure yet; leave this unknown and do not assume an answer."}`;
-    }).join("\n\n");
-  }
-
   function startNewExploration() {
-    setNewStep(1); setTitle(""); setIdea(""); setAiDraft(null); setClarificationAnswers({});
-    setClarificationTranscript(""); setQuestionDirection("next"); setSelectedRunId(""); setError(""); setNotice(""); setWorkspaceSettingsOpen(false); setShowNew(true);
+    setTitle(""); setIdea(""); setTargetRegion(""); setResearchConsent(false); setAiDraft(null); setError(""); setNotice("");
+    setSelectedRunId(""); setWorkspaceSettingsOpen(false); setShowNew(true);
   }
 
-  async function createExperiment(event: FormEvent<HTMLFormElement>) {
+  async function createExperiment(event: FormEvent<HTMLFormElement>, runAfterSave = false) {
     event.preventDefault(); if (!org) { setError("Your workspace is not ready yet."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
@@ -484,69 +518,57 @@ export default function Home() {
           business_context: {
             business_type: org.business_type,
             location: [org.city, org.region, org.country].filter(Boolean).join(", ") || null,
+            target_geography: targetRegion.trim() || aiDraft?.market_research.geography || null,
             timezone: org.timezone,
           },
           ...(simulationConfig ? { simulation: { engine, config: simulationConfig } } : {}),
           discovery: {
             user_description: idea.trim(),
-            user_answers: clarificationTranscript || discoveryTranscript(),
+            user_answers: JSON.stringify({ idea: idea.trim(), target_geography: targetRegion.trim() || null }),
             ai_assumptions: aiDraft?.assumptions || [],
             unresolved_questions: [],
             suggested_variables: aiDraft?.variables || [],
             market_research: aiDraft?.market_research || null,
+            decision_brief: aiDraft?.decision_brief || null,
             evidence_status: environmentForExperiment ? "environment_linked_not_used_for_calibration" : "no_external_evidence_attached",
           },
         },
       }));
-      setExperiments((items) => [experiment, ...items]); setActiveId(experiment.id); setSelectedRunId(""); setShowNew(false); setTitle(""); setIdea(""); setAiDraft(null); setClarificationAnswers({}); setClarificationTranscript(""); setNewStep(1);
-      if (simulationConfig) {
-        try {
-          const experimentScenarios = await api<Scenario[]>(`/experiments/${experiment.id}/scenarios`, getToken);
-          const baseline = experimentScenarios.find((scenario) => scenario.is_baseline);
-          if (!baseline) throw new Error("The baseline scenario was not created.");
-          const queuedRun = await api<Run>(`/scenarios/${baseline.id}/runs`, getToken, jsonBody({}));
-          setSelectedScenario(baseline.id); setRuns([queuedRun]);
-          setNotice("Exploration saved. Sandbox has started a provisional simulation; review its assumptions, sources, and limits alongside the results.");
-        } catch {
-          setNotice("Exploration saved with a runnable model, but Sandbox could not start the run yet. Use Run scenario from the dashboard to retry.");
-        }
+      setExperiments((items) => [experiment, ...items]); setActiveId(experiment.id); setSelectedRunId(""); setShowNew(false); setTitle(""); setIdea(""); setTargetRegion(""); setResearchConsent(false); setAiDraft(null);
+      if (runAfterSave && simulationConfig) {
+        const experimentScenarios = await api<Scenario[]>(`/experiments/${experiment.id}/scenarios`, getToken);
+        const baseline = experimentScenarios.find((scenario) => scenario.is_baseline);
+        if (!baseline) throw new Error("The baseline scenario could not be created.");
+        setScenarios(experimentScenarios); setSelectedScenario(baseline.id); setSimulationOpen(true);
+        const run = await api<Run>(`/scenarios/${baseline.id}/runs`, getToken, jsonBody({}));
+        setRuns([run]); setNotice("Decision saved and the first illustrative simulation is running. Its assumptions and limits stay visible with the results.");
       } else {
-        setNotice("Exploration saved with its discovery and market research. No structurally valid model configuration was available, so no run was created.");
+        setNotice("Decision brief saved. No simulation was run; open the optional sandbox when you want to model a specific sub-question.");
       }
     } catch (cause) { setError(explainError(cause)); }
     finally { setBusy(false); }
   }
 
-  async function draftWithAi(answers: Record<number, string> = clarificationAnswers, firstAnswer: string = idea) {
+  async function draftWithAi() {
     if (draftingRef.current) return;
-    const transcript = discoveryTranscript(answers, firstAnswer);
+    if (!researchConsent) {
+      setError("Confirm that Sandbox may share this idea with its research providers before continuing.");
+      return;
+    }
+    if (idea.trim().length < 20) {
+      setError("Add a little more detail so Sandbox can research the idea responsibly.");
+      return;
+    }
     draftingRef.current = true; setDrafting(true); setError("");
     try {
-      const businessContext = org ? `\n\nWorkspace context (user-provided): business type: ${org.business_type}; location: ${[org.city, org.region, org.country].filter(Boolean).join(", ") || "not provided"}; time zone: ${org.timezone || "not provided"}. Use this only to interpret terminology and questions; do not infer demand or operating facts from location.` : "";
-      const draft = await api<Interpretation>("/ai/interpret", getToken, jsonBody({ idea: `Founder idea and completed 21-question discovery. The founder has completed the fixed questionnaire; do not ask another question. Treat skipped answers as unknown, not facts.\n\n${transcript}${businessContext}`, geography: answers[6]?.trim() || null }));
+      const draft = await api<Interpretation>("/ai/interpret", getToken, jsonBody({ idea: idea.trim(), geography: targetRegion.trim() || null }));
       setEngine(draft.suggested_engine); setAiDraft(draft); setTitle(draft.title); setDomain(draft.domain || "general"); setArrival(String(draft.simulation_config.arrival_rate_per_hour ?? ""));
-      setClarificationTranscript(transcript);
       setService(String(draft.simulation_config.service_rate_per_hour_per_server ?? ""));
       setServers(String(draft.simulation_config.servers ?? "")); setDuration(String(draft.simulation_config.duration_hours ?? ""));
       setInventoryInputs((previous) => Object.fromEntries(Object.keys(previous).map((key) => [key, draft.simulation_config[key] == null ? previous[key as keyof typeof previous] : String(draft.simulation_config[key])])) as typeof previous);
       setMonteInputs((previous) => Object.fromEntries(Object.keys(previous).map((key) => [key, draft.simulation_config[key] == null ? previous[key as keyof typeof previous] : String(draft.simulation_config[key])])) as typeof previous);
-      setQuestionDirection("next"); setNewStep(22);
     } catch (cause) { setError(explainError(cause)); }
     finally { draftingRef.current = false; setDrafting(false); }
-  }
-
-  function continueDiscoveryQuestion() {
-    const answer = (newStep === 1 ? idea : clarificationAnswers[newStep] || "").trim() || "Not sure yet.";
-    const nextAnswers = newStep === 1 ? clarificationAnswers : { ...clarificationAnswers, [newStep]: answer };
-    if (newStep === 1) setIdea(answer);
-    else setClarificationAnswers(nextAnswers);
-    setError("");
-    if (newStep === 21) {
-      void draftWithAi(nextAnswers, idea);
-      return;
-    }
-    setQuestionDirection("next");
-    setNewStep((step) => Math.min(step + 1, 22));
   }
 
   async function startRun(scenario: Scenario) {
@@ -556,6 +578,23 @@ export default function Home() {
       setSelectedScenario(scenario.id); setNotice(`Run queued for ${scenario.name}.`);
       const updated = await api<Run[]>(`/experiments/${activeId}/runs`, getToken);
       setRuns(updated);
+    } catch (cause) { setError(explainError(cause)); }
+    finally { setBusy(false); }
+  }
+
+  async function submitWhatIf(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeScenario || !activeId || whatIfQuestion.trim().length < 5) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const result = await api<{ scenario: Scenario; rationale: string; research_sources: { title: string; url: string }[] }>(
+        "/ai/what-if", getToken,
+        jsonBody({ experiment_id: activeId, scenario_id: activeScenario.id, question: whatIfQuestion.trim() }),
+      );
+      setScenarios((items) => [...items, result.scenario]); setSelectedScenario(result.scenario.id); setSimulationOpen(true);
+      const run = await api<Run>(`/scenarios/${result.scenario.id}/runs`, getToken, jsonBody({}));
+      setRuns((items) => [run, ...items]); setSelectedRunId(""); setWhatIfQuestion("");
+      setNotice(`${result.scenario.name}: ${result.rationale}${result.research_sources.length ? ` ${result.research_sources.length} web sources reviewed.` : ""}`);
     } catch (cause) { setError(explainError(cause)); }
     finally { setBusy(false); }
   }
@@ -775,83 +814,60 @@ export default function Home() {
             </form>
           </section>}
 
-          {showNew && <section className="glass-panel rise mb-8 min-w-0 overflow-hidden">
-            <div className="flex items-start justify-between border-b border-border/60 p-5 sm:p-6">
-              <div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Founder discovery</p><h2 className="mt-1 text-xl font-extrabold">A clear picture of your idea</h2></div>
-              <button type="button" onClick={() => setShowNew(false)} aria-label="Close exploration questions" className="glass-icon grid size-11 place-items-center"><X size={18} aria-hidden="true" /></button>
+          {showNew && <section className="glass-panel rise mx-auto mb-8 min-w-0 max-w-4xl overflow-hidden">
+            <div className="flex items-start justify-between gap-4 border-b border-border/60 p-5 sm:p-7">
+              <div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Founder decision brief</p><h2 className="mt-1 text-2xl font-black sm:text-3xl">One idea in. One decision out.</h2><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Describe it in your own words. Sandbox researches the market, weighs the alternatives, and gives you the three assumptions to test first.</p></div>
+              <button type="button" onClick={() => setShowNew(false)} aria-label="Close idea review" className="glass-icon grid size-11 shrink-0 place-items-center focus-visible:ring-2 focus-visible:ring-ring"><X size={18} aria-hidden="true" /></button>
             </div>
-            <form onSubmit={(event) => { event.preventDefault(); if (newStep === 22) void createExperiment(event); else continueDiscoveryQuestion(); }} className="mx-auto w-full min-w-0 max-w-3xl p-4 sm:p-8" aria-busy={busy || drafting}>
-              {newStep <= 21 && (() => {
-                const question = DISCOVERY_QUESTIONS[newStep - 1];
-                const sectionIndex = Math.floor((newStep - 1) / 3);
-                const sectionNames = ["Idea & problem", "People & market", "Product & delivery", "Value & competition", "Business model & reach", "Trust & operations", "Readiness & validation"];
-                const questionInSet = ((newStep - 1) % 3) + 1;
-                const answer = newStep === 1 ? idea : clarificationAnswers[newStep] || "";
-                return <div key={newStep} className={`question-slide-in question-slide-in-${questionDirection}`}>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-2 rounded-full bg-accent/80 px-3 py-1.5 text-xs font-bold"><Sparkles size={14} aria-hidden="true" /> Set {sectionIndex + 1} of 7 · {sectionNames[sectionIndex]}</span>
-                    <span className="font-mono text-xs text-muted-foreground">Question {newStep} of 21</span>
-                  </div>
-                  <div className="mt-5" role="group" aria-label={`Question ${newStep} of 21, answer ${questionInSet} of 3 in this set`}>
-                    <div className="question-set-progress" aria-hidden="true">{sectionNames.map((_, index) => <span key={index} className={index < sectionIndex ? "is-complete" : index === sectionIndex ? "is-current" : ""} />)}</div>
-                    <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground"><span>{question.section}</span><span>Answer {questionInSet} of 3</span></div>
-                    <div className="mt-2 grid gap-1.5" style={{ gridTemplateColumns: "repeat(21, minmax(0, 1fr))" }} aria-hidden="true">
-                      {DISCOVERY_QUESTIONS.map((_, index) => <span key={index} className={`h-1.5 rounded-full transition-colors duration-200 ease-out ${index < newStep ? "bg-secondary" : "bg-foreground/10"}`} />)}
-                    </div>
-                  </div>
-                  <p className="mt-7 text-sm leading-6 text-muted-foreground">{question.hint}</p>
-                  <label htmlFor="discovery-answer" className="mt-2 block break-words text-2xl font-extrabold leading-tight sm:text-3xl">{question.question}</label>
-                  <textarea id="discovery-answer" autoFocus rows={5} value={answer} onChange={(event) => newStep === 1 ? setIdea(event.target.value) : setClarificationAnswers((previous) => ({ ...previous, [newStep]: event.target.value }))} placeholder={question.placeholder} className="glass-control mt-6 w-full min-w-0 resize-y p-4 text-base leading-7" />
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">Answer in plain language. Exact figures are not expected. If you are unsure, leave this blank and we will mark it as unknown.</p>
-                  {error && <div role="alert" className="mt-4 rounded-2xl border border-destructive bg-card p-3 text-sm">{error}</div>}
-                  <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <button type="button" disabled={newStep === 1 || drafting} onClick={() => { setQuestionDirection("previous"); setNewStep((step) => Math.max(1, step - 1)); setError(""); }} className="glass-button min-h-11 px-4 text-sm font-semibold disabled:opacity-40">Previous</button>
-                    <button type="button" disabled={drafting} onClick={continueDiscoveryQuestion} className="glass-primary flex min-h-11 items-center justify-center px-5 text-sm font-extrabold disabled:opacity-60">{newStep === 21 ? drafting ? "Researching your idea…" : "Review your summary" : "Continue"}<ArrowUpRight size={16} className="ml-2" aria-hidden="true" /></button>
-                  </div>
-                </div>;
-              })()}
-              {newStep === 22 && aiDraft && <div className="question-slide-in question-slide-in-next space-y-6">
-                <div className="flex flex-wrap items-center justify-between gap-3"><span className="inline-flex items-center gap-2 rounded-full bg-accent/80 px-3 py-1.5 text-xs font-bold"><Check size={14} aria-hidden="true" /> Summary · Ready for Sandbox</span><span className="font-mono text-xs text-muted-foreground">Page 22 of 22</span></div>
-                <div className="grid gap-1.5" style={{ gridTemplateColumns: "repeat(22, minmax(0, 1fr))" }} aria-hidden="true">{Array.from({ length: 22 }, (_, index) => <span key={index} className="h-1.5 rounded-full bg-secondary" />)}</div>
-                <header><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your idea, refined</p><h3 className="mt-2 break-words text-2xl font-black leading-tight sm:text-3xl">{aiDraft.title || title || "Your exploration"}</h3><p className="mt-3 break-words text-sm leading-6 text-muted-foreground">{aiDraft.objective}</p></header>
-
-                <section className="glass-question" aria-label="Market research summary">
-                  <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Market research</p><h4 className="mt-1 break-words text-lg font-extrabold">{aiDraft.market_research.market_definition || "Market opportunity"}</h4></div><span className="rounded-full bg-secondary/15 px-3 py-1.5 text-xs font-bold">{aiDraft.market_research.status === "ready" ? "Sources found" : aiDraft.market_research.status === "needs_clarification" ? "More evidence needed" : "No reliable estimate"}</span></div>
-                  <p className="mt-3 break-words text-sm leading-5"><strong>Audience:</strong> {aiDraft.market_research.target_customer || "Not established from your answers"}</p><p className="mt-1 break-words text-sm leading-5"><strong>Geography:</strong> {aiDraft.market_research.geography || "Not established from your answers"}</p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-border/60 bg-card/60 p-4"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total addressable market · TAM</p><p className="mt-2 text-lg font-extrabold">{formatMarketRange(aiDraft.market_research.tam_low_usd, aiDraft.market_research.tam_high_usd)}</p></div><div className="rounded-2xl border border-border/60 bg-card/60 p-4"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Serviceable market · SAM</p><p className="mt-2 text-lg font-extrabold">{formatMarketRange(aiDraft.market_research.sam_low_usd, aiDraft.market_research.sam_high_usd)}</p></div></div>
-                  <p className="mt-4 text-sm leading-6">{aiDraft.market_research.method}</p>
-                  {aiDraft.market_research.assumptions.length > 0 && <div className="mt-4"><p className="text-xs font-bold uppercase tracking-wider">Sizing assumptions</p><ul className="mt-2 space-y-1 text-sm leading-5">{aiDraft.market_research.assumptions.map((item) => <li key={item}>• {item}</li>)}</ul></div>}
-                  <div className="mt-4 border-t border-border/60 pt-3"><p className="text-xs font-bold uppercase tracking-wider">Sources reviewed</p>{aiDraft.market_research.sources.length > 0 ? <ul className="mt-2 space-y-2">{aiDraft.market_research.sources.map((source) => <li key={source.url} className="text-xs leading-5"><a href={source.url} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">{source.title}</a><span className="text-muted-foreground"> · {[source.publisher, source.published_at].filter(Boolean).join(" · ")}</span><p className="text-muted-foreground">Supports: {source.supports}</p></li>)}</ul> : <p className="mt-2 text-sm leading-5 text-muted-foreground">No credible source was returned for a market estimate. The ranges remain unestimated.</p>}</div>
-                  {aiDraft.market_research.caveats.length > 0 && <div className="mt-4 rounded-2xl border border-border/60 bg-card/50 p-3"><p className="text-xs font-bold uppercase tracking-wider">Research limits</p><ul className="mt-2 space-y-1 text-xs leading-5 text-muted-foreground">{aiDraft.market_research.caveats.map((item) => <li key={item}>• {item}</li>)}</ul></div>}
-                  <p className="mt-4 border-t border-border/60 pt-3 text-xs leading-5 text-muted-foreground">TAM and SAM are sourced estimates with assumptions, not a forecast of sales. Market research does not calibrate the simulation.</p>
-                </section>
-
-                <section className="glass-question" aria-label="Balanced idea review"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">What looks promising and what could go wrong</p><div className="mt-4 grid gap-5 sm:grid-cols-2"><div><h4 className="font-extrabold">Founder’s intended value</h4><p className="mt-2 break-words text-sm leading-5">{clarificationAnswers[11]?.trim() || "No specific advantage was provided yet; treat differentiation as an open question."}</p></div><div><h4 className="font-extrabold">Risks and unknowns</h4><ul className="mt-2 space-y-2 text-sm leading-5 text-muted-foreground">{[...aiDraft.market_research.caveats, ...aiDraft.missing_information].slice(0, 6).map((item) => <li key={item} className="break-words">• {item}</li>)}{aiDraft.market_research.caveats.length === 0 && aiDraft.missing_information.length === 0 && <li>• Costs, competition, and adoption still need independent validation.</li>}</ul></div></div></section>
-
-                <section className="glass-question" aria-label="Costs and competition"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Costs and competition</p><p className="mt-2 text-sm leading-6">Your answers and the sources above can surface alternatives people use today. This research draft does not provide verified competitor comparisons or operating costs. Treat both as open questions until supported by specific evidence.</p><p className="mt-2 text-xs leading-5 text-muted-foreground">The sandbox model does not include acquisition costs, staffing or infrastructure expenses, pricing, payment fees, or competitor behavior unless those are explicitly represented in its assumptions.</p></section>
-
-                <section className="glass-question" aria-label="Model readiness"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sandbox model readiness</p><p className="mt-2 text-sm leading-6">{aiDraft.configuration_valid ? `Sandbox prepared a provisional ${aiDraft.suggested_engine.replaceAll("_", " ")} scenario using cited benchmarks where available and clearly labeled assumptions where evidence is missing. Its outputs are conditional model results, not verified real-world truth or a forecast.` : "No available model could represent a useful question with responsibly bounded inputs yet. Your idea and research will still be saved; the dashboard will explain the model limitations."}</p>{aiDraft.assumptions.length > 0 && <div className="mt-3"><h4 className="text-xs font-bold uppercase tracking-wider">Scenario assumptions to review</h4><ul className="mt-2 space-y-1 text-sm leading-5">{aiDraft.assumptions.map((item) => <li key={item}>• {item}</li>)}</ul></div>}{aiDraft.variables.length > 0 && <ul className="mt-3 space-y-2">{aiDraft.variables.map((variable) => <li key={variable.name} className="text-sm"><strong>{variable.name.replaceAll("_", " ")}:</strong> {variable.value ?? "Not estimated"}{variable.unit ? ` ${variable.unit}` : ""}<p className="text-xs leading-5 text-muted-foreground">{variable.rationale}</p></li>)}</ul>}{aiDraft.configuration_errors.length > 0 && <ul className="mt-3 space-y-1 text-xs leading-5 text-muted-foreground">{aiDraft.configuration_errors.map((item) => <li key={item}>• {item}</li>)}</ul>}</section>
-
-                <details className="glass-question"><summary className="cursor-pointer font-extrabold">Your answers · 21 questions in seven sets</summary><div className="mt-4 space-y-5">{Array.from({ length: 7 }, (_, setIndex) => <section key={setIndex}><h4 className="font-bold">Set {setIndex + 1} · {DISCOVERY_QUESTIONS[setIndex * 3].section}</h4><dl className="mt-2 space-y-3">{DISCOVERY_QUESTIONS.slice(setIndex * 3, setIndex * 3 + 3).map((item, offset) => { const questionNumber = setIndex * 3 + offset + 1; const answer = questionNumber === 1 ? idea : clarificationAnswers[questionNumber]; return <div key={questionNumber} className="border-t border-border/60 pt-2"><dt className="text-xs font-semibold text-muted-foreground">{questionNumber}. {item.question}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm">{answer?.trim() || "Not sure yet."}</dd></div>; })}</dl></section>)}</div></details>
-
+            <form onSubmit={(event) => { event.preventDefault(); if (aiDraft) { const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null; void createExperiment(event, submitter?.value === "simulate"); } else void draftWithAi(); }} className="space-y-5 p-5 sm:p-7" aria-busy={busy || drafting}>
+              {!aiDraft && !drafting && <>
+                <div className="space-y-2">
+                  <label htmlFor="founder-idea" className="block text-sm font-bold">What do you want to build?</label>
+                  <textarea id="founder-idea" rows={6} minLength={20} maxLength={32000} required value={idea} onChange={(event) => { setIdea(event.target.value); setError(""); }} placeholder="Describe the idea, who you hope it helps, and where you might start. If you do not know those yet, just say what you want to build." className="glass-control w-full min-w-0 resize-y p-4 text-base leading-7 focus-visible:ring-2 focus-visible:ring-ring" />
+                  <p className="text-xs leading-5 text-muted-foreground">No market data or technical numbers needed. Describe the opportunity, who benefits, what exists today, and why your approach could matter.</p>
+                </div>
+                <div className="space-y-2"><label htmlFor="target-region" className="block text-sm font-bold">Which ecosystem and regions do you want to serve?</label><textarea id="target-region" rows={2} maxLength={1000} value={targetRegion} onChange={(event) => setTargetRegion(event.target.value)} placeholder="For example: independent AI developers and API teams in Nigeria and Kenya, starting with Solana ecosystem builders; online-first across West Africa." className="glass-control w-full min-w-0 resize-y p-4 text-sm leading-6 focus-visible:ring-2 focus-visible:ring-ring" /><p className="text-xs leading-5 text-muted-foreground">Use your own words. Name countries, cities, communities, industries, or say you’re still exploring.</p></div>
+                <label htmlFor="research-consent" className="flex cursor-pointer items-start gap-3 rounded-2xl border border-warning/70 bg-warning/10 p-4 text-sm leading-5">
+                  <input id="research-consent" type="checkbox" checked={researchConsent} onChange={(event) => setResearchConsent(event.target.checked)} className="mt-0.5 size-4 shrink-0 accent-[var(--primary)] focus-visible:ring-2 focus-visible:ring-ring" />
+                  <span><strong>Share this idea for research.</strong> Sandbox sends it to Firecrawl and the selected AI provider to prepare the brief. Do not include anything you are unwilling to share with those services. Your idea is saved to your workspace only if you choose to save the brief.</span>
+                </label>
                 {error && <div role="alert" className="rounded-2xl border border-destructive bg-card p-3 text-sm">{error}</div>}
-                <p className="text-xs leading-5 text-muted-foreground">AI research and commentary can be incomplete. Sources do not guarantee demand, costs or competitors. You can edit your answers before starting the exploration.</p>
-                <div className="flex flex-col-reverse gap-3 border-t border-border/60 pt-5 sm:flex-row sm:items-center sm:justify-between"><button type="button" disabled={busy} onClick={() => { setQuestionDirection("previous"); setNewStep(21); }} className="glass-button min-h-11 px-4 text-sm font-semibold">Back to question 21</button><button disabled={busy || drafting} type="submit" className="glass-primary flex min-h-12 items-center justify-center px-6 text-sm font-extrabold disabled:opacity-60">{busy ? <LoaderCircle size={16} className="mr-2 motion-safe:animate-spin" aria-hidden="true" /> : null}Enter Sandbox<ArrowUpRight size={16} className="ml-2" aria-hidden="true" /></button></div>
-              </div>}
-              {newStep === 22 && !aiDraft && <div className="research-splash py-12 text-center" role="status" aria-live="polite"><SandboxMascot mood="working" size="large" /><p className="mt-4 text-lg font-bold">Researching your idea</p><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">Checking the context you shared and preparing a summary for you to review.</p><div className="boot-lines mx-auto" aria-hidden="true"><span /><span /><span /></div></div>}
+                <button type="submit" disabled={drafting || !researchConsent || idea.trim().length < 20} className="glass-primary flex min-h-12 w-full items-center justify-center gap-2 px-6 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"><Sparkles size={17} aria-hidden="true" />Research my idea<ArrowUpRight size={16} aria-hidden="true" /></button>
+              </>}
+              {drafting && <ResearchingIdea idea={idea} region={targetRegion} />}
+              {aiDraft && <article id="decision-brief" className="decision-brief space-y-5" aria-label="Sandbox decision brief">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4"><span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Decision brief · {aiDraft.market_research.geography || "Geography not established"}</span><span className={`rounded-full border px-3 py-1.5 text-sm font-extrabold ${aiDraft.decision_brief.verdict === "strong" ? "border-success bg-success/10 text-success" : aiDraft.decision_brief.verdict === "weak" ? "border-destructive bg-destructive/10 text-destructive" : "border-warning bg-warning/15 text-foreground"}`}>{aiDraft.decision_brief.verdict === "strong" ? "Strong case to test" : "Weak case so far"}</span></div>
+                <header><h3 className="break-words text-2xl font-black leading-tight sm:text-3xl">{aiDraft.title || title || "Your idea"}</h3><p className="mt-2 max-w-3xl break-words text-sm leading-6 text-muted-foreground">{aiDraft.objective}</p><p className="mt-4 max-w-3xl break-words text-base leading-7">{aiDraft.decision_brief.verdict_reason}</p></header>
+                <section className="grid gap-3 md:grid-cols-2"><div className="rounded-3xl border border-success/40 bg-success/5 p-5"><p className="text-xs font-bold uppercase tracking-widest text-success">Why it could work</p><ul className="mt-3 space-y-3">{aiDraft.decision_brief.what_supports_it.map((item, index) => <li key={index} className="flex gap-3 text-sm leading-6"><span className="mt-2 size-2 shrink-0 rounded-full bg-success" />{item}</li>)}</ul></div><div className="rounded-3xl border border-warning/60 bg-warning/10 p-5"><p className="text-xs font-bold uppercase tracking-widest">What makes it hard</p><ul className="mt-3 space-y-3">{aiDraft.decision_brief.what_makes_it_hard.map((item, index) => <li key={index} className="flex gap-3 text-sm leading-6"><span className="mt-2 size-2 shrink-0 rounded-full bg-warning" />{item}</li>)}</ul></div></section>
+                <section className="grid gap-3 sm:grid-cols-2"><div className="glass-metric rounded-3xl p-5"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total addressable market · annual</p><p className="mt-2 text-2xl font-black tracking-tight">{formatMarketRange(aiDraft.market_research.tam_low_usd, aiDraft.market_research.tam_high_usd)}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">TAM · cited estimate, when evidence supports one</p></div><div className="glass-metric rounded-3xl p-5"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Serviceable market · annual</p><p className="mt-2 text-2xl font-black tracking-tight">{formatMarketRange(aiDraft.market_research.sam_low_usd, aiDraft.market_research.sam_high_usd)}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">SAM · narrowed to the stated customers and geography</p></div><p className="text-xs leading-5 text-muted-foreground sm:col-span-2">{aiDraft.market_research.status === "ready" ? aiDraft.market_research.method : `Not estimated: ${aiDraft.market_research.caveats[0] || "the available sources do not support a defensible range yet."}`}</p></section>
+                <section aria-labelledby="assumptions-title"><div className="flex flex-wrap items-baseline justify-between gap-2"><h4 id="assumptions-title" className="text-lg font-extrabold">The three assumptions this idea rests on</h4><span className="text-xs text-muted-foreground">Ranked by how badly it breaks if wrong</span></div><ol className="mt-3 space-y-3">{aiDraft.decision_brief.assumptions.slice().sort((a, b) => a.rank - b.rank).map((item) => <li key={item.rank} className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-[2.5rem_minmax(0,1fr)]"><span className="grid size-10 place-items-center rounded-full bg-primary text-sm font-black text-primary-foreground">{item.rank}</span><div className="min-w-0"><p className="font-bold">{item.assumption}</p><p className="mt-1 text-sm leading-5 text-muted-foreground">If wrong: {item.why_it_matters}</p><p className="mt-3 text-sm leading-5"><strong>Cheapest test this week:</strong> {item.cheapest_test_this_week}</p><p className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Evidence: {item.evidence_strength}</p></div></li>)}</ol></section>
+                <section className="grid gap-4 border-y border-border py-4 sm:grid-cols-2"><div><h4 className="text-sm font-extrabold">Who it is for</h4><p className="mt-1 text-sm leading-5">{aiDraft.decision_brief.target_audience}</p></div><div><h4 className="text-sm font-extrabold">Market and alternatives</h4><p className="mt-1 text-sm leading-5">{aiDraft.decision_brief.market_and_competition}</p></div></section>
+                <section className="rounded-2xl border border-secondary bg-accent p-4"><p className="text-xs font-bold uppercase tracking-widest">The next move</p><p className="mt-2 text-sm font-semibold leading-6">{aiDraft.decision_brief.recommended_next_step}</p><p className="mt-3 text-xs leading-5 text-muted-foreground"><strong>Biggest risk:</strong> {aiDraft.decision_brief.biggest_risk}</p></section>
+                <details className="rounded-2xl border border-border p-4"><summary className="min-h-10 cursor-pointer py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Research trail · sources and method</summary><div className="mt-3 space-y-4 text-sm"><p className="leading-6">{aiDraft.market_research.market_definition}</p><p className="leading-6">{aiDraft.market_research.method}</p>{aiDraft.market_research.assumptions.length > 0 && <ul className="list-disc space-y-1 pl-5 text-muted-foreground">{aiDraft.market_research.assumptions.map((item) => <li key={item}>{item}</li>)}</ul>}<div><h5 className="font-bold">Sources · market, competitors, pitch and outcome examples</h5>{aiDraft.market_research.sources.length ? <ul className="mt-2 space-y-3">{aiDraft.market_research.sources.map((source) => <li key={source.url} className="text-xs leading-5"><a href={source.url} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">{source.title}</a><span className="text-muted-foreground"> · {[source.publisher, source.published_at].filter(Boolean).join(" · ")}</span><p className="mt-1 text-muted-foreground">{source.supports}</p></li>)}</ul> : <p className="mt-2 text-xs leading-5 text-muted-foreground">No reliable source returned; market size is left unestimated.</p>}</div>{aiDraft.market_research.caveats.length > 0 && <ul className="list-disc space-y-1 pl-5 text-xs leading-5 text-muted-foreground">{aiDraft.market_research.caveats.map((item) => <li key={item}>{item}</li>)}</ul>}<p className="border-t border-border pt-3 text-xs leading-5 text-muted-foreground">Firecrawl search results can be incomplete or biased. Market ranges are estimates, not forecasts. Sources and pitch examples provide context; they do not calibrate the simulation.</p></div></details>
+                {error && <div role="alert" className="rounded-2xl border border-destructive bg-card p-3 text-sm">{error}</div>}
+                <div className="flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between"><button type="button" disabled={busy} onClick={() => { setAiDraft(null); setResearchConsent(false); setError(""); }} className="glass-button min-h-11 px-4 text-sm font-semibold">Edit idea</button><div className="flex flex-col gap-2 sm:flex-row"><button type="submit" value="save" disabled={busy} className="glass-button min-h-12 px-5 text-sm font-bold disabled:opacity-60">{busy ? <LoaderCircle size={16} className="mr-2 motion-safe:animate-spin" aria-hidden="true" /> : null}Save brief</button><button type="submit" value="simulate" disabled={busy || !aiDraft.configuration_valid} title={!aiDraft.configuration_valid ? "The research could not construct a responsible configuration for one of the available models." : "Save this brief and run its clearly labeled illustrative model"} className="glass-primary flex min-h-12 items-center justify-center px-6 text-sm font-extrabold disabled:cursor-not-allowed disabled:opacity-50"><Play size={16} className="mr-2" aria-hidden="true" />Save & simulate<ArrowUpRight size={16} className="ml-2" aria-hidden="true" /></button></div></div>
+                <p className="text-xs leading-5 text-muted-foreground">This is a research judgment based on the idea and cited sources, not a guarantee or forecast. Saving stores the idea and brief in your workspace.</p>
+              </article>}
             </form>
           </section>}
 
           {!showNew && (!currentExperiment ? <section className="studio-welcome mx-auto max-w-3xl border-2 border-foreground bg-card p-6 sm:p-10">
             <div className="inline-flex items-center gap-2 bg-accent px-3 py-2 text-xs font-bold uppercase tracking-wider"><FlaskConical size={14} aria-hidden="true" /> Your workspace</div>
-            <h1 className="mt-6 max-w-xl text-3xl font-black tracking-tight sm:text-4xl">Explore your idea before you have all the answers.</h1>
-            <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">Describe what you want to build. Sandbox will ask about the people you want to serve and where, research the market with citations, then help you decide whether the available evidence supports a simulation.</p>
-            <button type="button" onClick={startNewExploration} className="mt-7 flex min-h-12 items-center gap-2 border border-foreground bg-primary px-5 text-sm font-extrabold text-primary-foreground hover:brightness-95"><Plus size={17} aria-hidden="true" />Explore an idea</button>
-            <div className="mt-9 grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-border p-4"><span className="font-mono text-xs text-muted-foreground">01</span><p className="mt-2 font-bold">Describe</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Start with the idea in everyday language.</p></div><div className="rounded-2xl border border-border p-4"><span className="font-mono text-xs text-muted-foreground">02</span><p className="mt-2 font-bold">Research</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Clarify audience and geography, then inspect sources and assumptions.</p></div><div className="rounded-2xl border border-border p-4"><span className="font-mono text-xs text-muted-foreground">03</span><p className="mt-2 font-bold">Model when ready</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Run a simulation once usable inputs have evidence behind them.</p></div></div>
+            <h1 className="mt-6 max-w-xl text-3xl font-black tracking-tight sm:text-4xl">One idea in. One honest decision out.</h1>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">Tell Sandbox what you want to build. It researches the market and alternatives, then returns a clear verdict, the three assumptions most likely to break the idea, and the cheapest way to test each this week.</p>
+            <button type="button" onClick={startNewExploration} className="mt-7 flex min-h-12 items-center gap-2 border border-foreground bg-primary px-5 text-sm font-extrabold text-primary-foreground hover:brightness-95"><Plus size={17} aria-hidden="true" />Get a decision brief</button>
           </section> : <div className="studio-dashboard rise space-y-7">
-            <div className="dashboard-intro flex min-w-0 flex-col justify-between gap-5 sm:flex-row sm:items-end"><div className="dashboard-intro-copy min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="max-w-full break-words rounded-full border border-border bg-card px-3 py-1 text-xs font-bold uppercase tracking-wider">{currentExperiment.domain.replaceAll("_", " ")}</span><span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="size-2 rounded-full bg-secondary" /> Version {currentExperiment.version}</span></div><h1 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-4xl">{currentExperiment.title}</h1><p className="mt-2 max-w-2xl break-words text-sm leading-6 text-muted-foreground">{currentExperiment.objective || "No objective added."}</p></div>{simulation && <div className="dashboard-actions flex flex-wrap items-center gap-2"><div className="seed-control flex items-center gap-2"><label htmlFor="run-seed" className="text-xs font-semibold text-muted-foreground">Seed</label><input id="run-seed" type="text" inputMode="numeric" pattern="[0-9]+" value={runSeed} onChange={(event) => setRunSeed(event.target.value)} placeholder="Random" aria-describedby="run-seed-help" className="h-9 w-20 border border-border bg-card px-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring" /><span id="run-seed-help" className="sr-only">Optional. Leave blank to use a random seed.</span></div><button type="button" disabled={!activeScenario || busy} onClick={() => activeScenario && void startRun(activeScenario)} className="flex min-h-10 shrink-0 items-center justify-center gap-2 border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground disabled:opacity-50"><Play size={16} aria-hidden="true" />Run scenario</button></div>}</div>
-            {!simulation && <section className="glass-question discovery-saved"><div className="flex items-center gap-4"><SandboxMascot mood="ready" size="small" /><div className="min-w-0"><h2 className="font-extrabold">Discovery saved</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">This exploration contains your idea, founder answers, and market research. Sandbox did not have evidence-backed inputs for a responsible simulation, so it did not create a run or present market estimates as simulation results.</p></div></div></section>}
-            {simulation && <>
+            <div className="dashboard-intro flex min-w-0 flex-col justify-between gap-5 sm:flex-row sm:items-end"><div className="dashboard-intro-copy min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="max-w-full break-words rounded-full border border-border bg-card px-3 py-1 text-xs font-bold uppercase tracking-wider">{currentExperiment.domain.replaceAll("_", " ")}</span><span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="size-2 rounded-full bg-secondary" /> Version {currentExperiment.version}</span></div><h1 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-4xl">{currentExperiment.title}</h1><p className="mt-2 max-w-2xl break-words text-sm leading-6 text-muted-foreground">{currentExperiment.objective || "No objective added."}</p></div>{simulation && <button type="button" onClick={() => setSimulationOpen((open) => !open)} className="glass-primary flex min-h-11 shrink-0 items-center justify-center gap-2 px-4 text-sm font-extrabold"><Play size={15} aria-hidden="true" />{runs.length ? "Open simulation" : "Simulate assumptions"}</button>}</div>
+            {savedDecisionBrief ? <article className="glass-panel mx-auto w-full max-w-4xl space-y-5 p-5 sm:p-7" aria-label="Saved founder decision brief">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Your decision brief</p><span className={`rounded-full border px-3 py-1.5 text-sm font-extrabold ${savedDecisionBrief.verdict === "strong" ? "border-success bg-success/10 text-success" : savedDecisionBrief.verdict === "weak" ? "border-destructive bg-destructive/10 text-destructive" : "border-warning bg-warning/15 text-foreground"}`}>{savedDecisionBrief.verdict === "strong" ? "Strong case to test" : "Weak case so far"}</span></div>
+              <p className="text-base leading-7">{savedDecisionBrief.verdict_reason}</p>
+              <section><h2 className="text-lg font-extrabold">Three assumptions to test this week</h2><ol className="mt-3 space-y-3">{savedDecisionBrief.assumptions.slice().sort((a, b) => a.rank - b.rank).map((item) => <li key={item.rank} className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-[2.5rem_minmax(0,1fr)]"><span className="grid size-10 place-items-center rounded-full bg-primary text-sm font-black text-primary-foreground">{item.rank}</span><div className="min-w-0"><p className="font-bold">{item.assumption}</p><p className="mt-1 text-sm leading-5 text-muted-foreground">If wrong: {item.why_it_matters}</p><p className="mt-3 text-sm leading-5"><strong>Cheapest test:</strong> {item.cheapest_test_this_week}</p></div></li>)}</ol></section>
+              <div className="grid gap-4 border-y border-border py-4 sm:grid-cols-2"><div><h3 className="text-sm font-extrabold">Market and alternatives</h3><p className="mt-1 text-sm leading-5">{savedDecisionBrief.market_and_competition}</p></div><div><h3 className="text-sm font-extrabold">Recommended next move</h3><p className="mt-1 text-sm leading-5">{savedDecisionBrief.recommended_next_step}</p></div></div>
+              <section className="grid gap-3 sm:grid-cols-2"><div className="rounded-3xl border border-success/40 bg-success/5 p-4"><h3 className="text-xs font-bold uppercase tracking-widest text-success">Why it could work</h3><ul className="mt-3 space-y-2">{savedDecisionBrief.what_supports_it.map((item, index) => <li key={index} className="flex gap-2 text-sm leading-5"><span className="mt-1.5 size-2 shrink-0 rounded-full bg-success" />{item}</li>)}</ul></div><div className="rounded-3xl border border-warning/60 bg-warning/10 p-4"><h3 className="text-xs font-bold uppercase tracking-widest">What makes it hard</h3><ul className="mt-3 space-y-2">{savedDecisionBrief.what_makes_it_hard.map((item, index) => <li key={index} className="flex gap-2 text-sm leading-5"><span className="mt-1.5 size-2 shrink-0 rounded-full bg-warning" />{item}</li>)}</ul></div></section>
+              {savedMarketResearch && <section className="grid gap-3 sm:grid-cols-2"><div className="glass-metric rounded-3xl p-4"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">TAM · annual</p><p className="mt-2 text-2xl font-black">{formatMarketRange(savedMarketResearch.tam_low_usd, savedMarketResearch.tam_high_usd)}</p></div><div className="glass-metric rounded-3xl p-4"><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SAM · annual</p><p className="mt-2 text-2xl font-black">{formatMarketRange(savedMarketResearch.sam_low_usd, savedMarketResearch.sam_high_usd)}</p></div></section>}
+              <details className="rounded-2xl border border-border p-4"><summary className="min-h-10 cursor-pointer py-2 text-sm font-bold">Research trail and risk notes</summary><div className="mt-3 space-y-3 text-sm leading-6"><p><strong>Who it is for:</strong> {savedDecisionBrief.target_audience}</p><p><strong>Biggest risk:</strong> {savedDecisionBrief.biggest_risk}</p>{savedMarketResearch && <><p>{savedMarketResearch.market_definition}</p><p><strong>Market sizing method:</strong> {savedMarketResearch.method}</p><p><strong>TAM:</strong> {formatMarketRange(savedMarketResearch.tam_low_usd, savedMarketResearch.tam_high_usd)} · <strong>SAM:</strong> {formatMarketRange(savedMarketResearch.sam_low_usd, savedMarketResearch.sam_high_usd)}</p>{savedMarketResearch.sources.length > 0 ? <ul className="space-y-2">{savedMarketResearch.sources.map((source) => <li key={source.url}><a className="font-semibold underline underline-offset-2" href={source.url} target="_blank" rel="noreferrer">{source.title}</a><span className="text-muted-foreground"> · {[source.publisher, source.published_at].filter(Boolean).join(" · ")}</span><p className="text-muted-foreground">{source.supports}</p></li>)}</ul> : <p>No reliable external sources were returned.</p>}{savedMarketResearch.caveats.map((caveat) => <p key={caveat} className="text-muted-foreground">{caveat}</p>)}</>}<p className="text-xs text-muted-foreground">Research supports this judgment; it does not validate the idea or guarantee a result.</p></div></details>
+            </article> : <section className="glass-question discovery-saved"><div className="flex items-center gap-4"><SandboxMascot mood="ready" size="small" /><div className="min-w-0"><h2 className="font-extrabold">Decision brief saved</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">This older exploration contains your idea and research summary but no saved decision brief. Start a new decision brief to get the verdict and three highest-risk assumptions.</p></div></div></section>}
+            {simulation && <details open={simulationOpen} onToggle={(event) => setSimulationOpen(event.currentTarget.open)} className="rounded-[2rem] border border-border bg-card shadow-[0_28px_90px_-60px_rgba(25,20,35,0.55)]"><summary className="min-h-16 cursor-pointer px-5 py-5 text-sm font-extrabold sm:px-7">Simulation studio <span className="ml-2 font-normal text-muted-foreground">· charts, scenarios, and plain-language what-ifs</span></summary><div className="space-y-6 border-t border-border p-4 sm:p-7"><div className="grid gap-4 rounded-3xl bg-foreground p-5 text-background sm:grid-cols-[1fr_auto] sm:items-center"><div><p className="text-xs font-bold uppercase tracking-widest text-background/60">Explore a possible future</p><p className="mt-2 max-w-2xl text-sm leading-6 text-background/85">This model explores the specific financial or operating question described in its assumptions. It is not a market forecast, and its result does not change the evidence-based decision above.</p></div><button type="button" disabled={!activeScenario || busy} onClick={() => activeScenario && void startRun(activeScenario)} className="flex min-h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-extrabold text-primary-foreground disabled:opacity-50"><Play size={15} aria-hidden="true" />Run baseline</button></div><form onSubmit={submitWhatIf} className="grid gap-3 rounded-3xl border border-border bg-muted/55 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:p-5"><div className="space-y-2"><label htmlFor="what-if-question" className="text-sm font-extrabold">What if something changed?</label><textarea id="what-if-question" rows={2} minLength={5} maxLength={1200} required value={whatIfQuestion} onChange={(event) => setWhatIfQuestion(event.target.value)} placeholder="What if buyer acquisition takes twice as long? What if the platform keeps a 12% fee? What if demand is only half the expected level?" className="glass-control w-full resize-y p-3 text-sm leading-6 focus-visible:ring-2 focus-visible:ring-ring" /><p className="text-xs leading-5 text-muted-foreground">Ask in plain language. Sandbox researches the scenario, changes only variables this model can represent, then runs a comparable branch.</p></div><button type="submit" disabled={busy || !activeScenario || whatIfQuestion.trim().length < 5} className="glass-primary flex min-h-11 items-center justify-center gap-2 px-5 text-sm font-extrabold disabled:opacity-50">{busy ? <LoaderCircle size={15} className="motion-safe:animate-spin" aria-hidden="true" /> : <ArrowUpRight size={15} aria-hidden="true" />}Explore what-if</button></form>
             <section aria-label="Experiment overview" className="metric-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{(currentEngine === "queueing" ? [["Arrivals / hour", config.arrival_rate_per_hour, "Configured assumption"], ["Service rate", config.service_rate_per_hour_per_server, "Per server, per hour"], ["Servers", config.servers, "Parallel capacity"], ["Duration", `${config.duration_hours ?? "—"} h`, "Simulation window"]] : currentEngine === "inventory" ? [["Demand / day", config.average_daily_demand, "Average assumption"], ["Reorder point", config.reorder_point, "Inventory threshold"], ["Order quantity", config.order_quantity, "Units per order"], ["Duration", `${config.duration_days ?? "—"} days`, "Simulation window"]] : [["Trials", config.trials, "Repeated scenarios"], ["Periods", config.periods, "Per trial"], ["Demand likely", config.demand_mode, "Units per period"], ["Fixed cost", config.fixed_cost_per_period, "Per period"]]).map(([label, value, note]) => <MetricCard key={String(label)} label={String(label)} value={String(value ?? "—")} note={String(note)} />)}</section>
 
             <div className="dashboard-grid grid gap-7 xl:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)]">
@@ -893,8 +909,8 @@ export default function Home() {
                 </section>
               </aside>
             </div>
-            </>}
-            <section id="environment" className="border border-border bg-card">
+            </div></details>}
+            <details className="rounded-2xl border border-border bg-card"><summary className="min-h-14 cursor-pointer px-5 py-4 text-sm font-bold">Supporting research sources and environments</summary><div className="space-y-4 border-t border-border p-4 sm:p-6"><section id="environment" className="border border-border bg-card">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5"><div><p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Environment library</p><h2 className="mt-1 text-lg font-extrabold">Sources & context</h2></div><button type="button" onClick={() => setNewEnvironmentOpen((open) => !open)} className="flex min-h-10 items-center gap-2 border border-border px-3 text-sm font-bold hover:bg-muted"><Plus size={15} aria-hidden="true" />New environment</button></div>
               {newEnvironmentOpen && <form onSubmit={createEnvironment} className="grid gap-3 border-b border-border bg-muted p-4 sm:grid-cols-2 xl:grid-cols-3 sm:items-end"><Field id="environment-name" label="Environment name" required value={environmentName} onChange={(event) => setEnvironmentName(event.target.value)} placeholder="e.g. Lagos service desk" /><div className="space-y-1.5"><label htmlFor="environment-type" className="text-sm font-semibold">Environment type</label><select id="environment-type" value={environmentType} onChange={(event) => setEnvironmentType(event.target.value as Environment["environment_type"])} className="h-11 w-full border border-border bg-card px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring"><option value="synthetic">Synthetic assumptions</option><option value="real_world">Real-world context</option></select></div><Field id="environment-country" label="Country" autoComplete="country-name" value={environmentCountry} onChange={(event) => setEnvironmentCountry(event.target.value)} placeholder="e.g. Nigeria" /><Field id="environment-city" label="City / area" autoComplete="address-level2" value={environmentCity} onChange={(event) => setEnvironmentCity(event.target.value)} placeholder="e.g. Lagos" /><div className="space-y-2"><p className="text-sm font-semibold">Coordinates <span className="font-normal text-muted-foreground">(optional)</span></p><button type="button" onClick={locateEnvironment} className="min-h-11 w-full border border-border bg-card px-3 text-sm font-bold hover:bg-background">{environmentCoordinates.latitude === null ? "Use current location" : `${environmentCoordinates.latitude}, ${environmentCoordinates.longitude}`}</button></div><div className="flex items-end"><button type="submit" disabled={busy} className="min-h-11 w-full border border-foreground bg-primary px-4 text-sm font-extrabold text-primary-foreground">Save environment</button></div><p className="text-xs leading-5 text-muted-foreground sm:col-span-2 xl:col-span-3">Location is optional. Current location is only requested after you choose the button, and it is stored as environment metadata. No map data is imported automatically.</p></form>}
               {environments.length ? <div className="grid gap-0 lg:grid-cols-[0.8fr_1.2fr]">
@@ -908,6 +924,7 @@ export default function Home() {
             </section>
             <section className="flex flex-col justify-between gap-3 border border-border bg-muted p-5 sm:flex-row sm:items-center"><div className="flex items-start gap-3"><Database size={18} className="mt-0.5" aria-hidden="true" /><div><p className="font-bold">Model notes</p><p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">Queueing models exponential arrivals and service across parallel servers. Inventory models daily demand and fixed lead-time replenishment. Monte Carlo samples user-provided ranges across repeated trials. None currently consumes live business feeds, calibrated maps, staffing calendars, or seasonality. AI-generated content is a draft and never determines run results.</p></div></div><span className="grid size-10 shrink-0 place-items-center border border-border bg-card" title="Model details"><CircleHelp size={16} aria-hidden="true" /></span></section>
             {latestRun?.status === "failed" && latestRun.error && <p role="alert" className="border border-destructive p-4 text-sm">Run failed: {latestRun.error}</p>}
+            </div></details>
           </div>)}
         </div>
         {waitlistAdminAccess && <section id="waitlist-admin" className="mt-8 overflow-hidden rounded-2xl border border-border bg-card">

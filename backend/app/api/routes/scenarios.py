@@ -64,6 +64,7 @@ def create_scenario(
         created_by_id=user.id,
         name=payload.name,
         overrides=payload.overrides,
+        context=payload.context,
     )
     db.add(scenario)
     db.flush()
@@ -71,7 +72,7 @@ def create_scenario(
         ScenarioVersion(
             scenario_id=scenario.id,
             revision=1,
-            snapshot={"name": scenario.name, "overrides": scenario.overrides},
+            snapshot={"name": scenario.name, "overrides": scenario.overrides, "context": scenario.context},
             created_by_id=user.id,
         )
     )
@@ -112,6 +113,7 @@ def branch_scenario(
         created_by_id=user.id,
         name=payload.name,
         overrides=payload.overrides,
+        context=payload.context or parent.context,
     )
     db.add(branch)
     db.flush()
@@ -119,7 +121,7 @@ def branch_scenario(
         ScenarioVersion(
             scenario_id=branch.id,
             revision=1,
-            snapshot={"name": branch.name, "overrides": branch.overrides},
+            snapshot={"name": branch.name, "overrides": branch.overrides, "context": branch.context},
             created_by_id=user.id,
         )
     )
@@ -148,7 +150,7 @@ def update_scenario(
         ScenarioVersion(
             scenario_id=scenario.id,
             revision=scenario.version,
-            snapshot={"name": scenario.name, "overrides": scenario.overrides},
+            snapshot={"name": scenario.name, "overrides": scenario.overrides, "context": scenario.context},
             created_by_id=user.id,
         )
     )

@@ -114,6 +114,7 @@ def create_experiment(payload: ExperimentCreate, user: CurrentUser, db: DbSessio
             created_by_id=user.id,
             name="Baseline",
             overrides={},
+            context=(experiment.specification or {}).get("business_context", {}),
             is_baseline=True,
         )
     db.add(baseline)
@@ -122,7 +123,7 @@ def create_experiment(payload: ExperimentCreate, user: CurrentUser, db: DbSessio
         ScenarioVersion(
             scenario_id=baseline.id,
             revision=1,
-            snapshot={"name": baseline.name, "overrides": baseline.overrides},
+            snapshot={"name": baseline.name, "overrides": baseline.overrides, "context": baseline.context},
             created_by_id=user.id,
         )
     )

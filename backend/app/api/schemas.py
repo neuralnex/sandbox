@@ -133,6 +133,7 @@ class ExperimentVersionRead(BaseModel):
 class ScenarioCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     overrides: dict[str, Any] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 class ScenarioBranchInput(ScenarioCreate):
@@ -143,6 +144,7 @@ class ScenarioUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, min_length=1, max_length=160)
     overrides: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
 
 
 class ScenarioRead(BaseModel):
@@ -153,6 +155,7 @@ class ScenarioRead(BaseModel):
     created_by_id: UUID
     name: str
     overrides: dict[str, Any]
+    context: dict[str, Any]
     is_baseline: bool
     version: int
     created_at: datetime
@@ -183,6 +186,7 @@ class SimulationRunRead(BaseModel):
     engine_version: str
     seed: int
     config: dict[str, Any]
+    context: dict[str, Any]
     status: str
     progress: int
     metrics: dict[str, Any] | None
@@ -338,6 +342,30 @@ class MarketResearchBrief(BaseModel):
     sources: list[MarketResearchSource]
 
 
+class LoadBearingAssumption(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rank: int = Field(ge=1, le=3)
+    assumption: str
+    why_it_matters: str
+    evidence_strength: Literal["supported", "inferred", "unknown"]
+    cheapest_test_this_week: str
+
+
+class IdeaDecisionBrief(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    verdict: Literal["strong", "weak"]
+    verdict_reason: str
+    what_supports_it: list[str] = Field(min_length=1, max_length=5)
+    what_makes_it_hard: list[str] = Field(min_length=1, max_length=5)
+    target_audience: str
+    market_and_competition: str
+    assumptions: list[LoadBearingAssumption] = Field(min_length=3, max_length=3)
+    biggest_risk: str
+    recommended_next_step: str
+
+
 class ExperimentInterpretation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -352,7 +380,22 @@ class ExperimentInterpretation(BaseModel):
     configuration_valid: bool
     configuration_errors: list[str]
     market_research: MarketResearchBrief
+    decision_brief: IdeaDecisionBrief
     interpretation_notice: str
+
+
+class WhatIfInput(BaseModel):
+    experiment_id: UUID
+    scenario_id: UUID
+    question: str = Field(min_length=5, max_length=1200)
+
+
+class WhatIfDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scenario_name: str = Field(min_length=1, max_length=120)
+    rationale: str
+    config_changes: SimulationDraftConfig
 
 
 class EvidenceSourceReference(BaseModel):

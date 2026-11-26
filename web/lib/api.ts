@@ -21,16 +21,27 @@ export type Experiment = {
 };
 export type Scenario = {
   id: string; experiment_id: string; parent_id: string | null; name: string;
-  overrides: Record<string, unknown>; is_baseline: boolean; version: number;
+  overrides: Record<string, unknown>; context: Record<string, unknown>; is_baseline: boolean; version: number;
 };
 export type Run = {
-  id: string; scenario_id: string; seed: number; config: Record<string, number>;
+  id: string; scenario_id: string; seed: number; config: Record<string, number>; context: Record<string, unknown>;
   status: "queued" | "running" | "cancel_requested" | "completed" | "failed" | "cancelled";
   progress: number; metrics: Record<string, unknown> | null; error: string | null;
   created_at: string; finished_at: string | null;
 };
 export type Environment = { id: string; name: string; environment_type: "real_world" | "digital_twin" | "synthetic"; configuration: Record<string, unknown>; provenance: Record<string, unknown>; version: number };
 export type Dataset = { id: string; environment_id: string; name: string; source_url: string | null; license: string | null; observed_at: string | null; metadata_json: Record<string, unknown> };
+export type IdeaDecisionBrief = {
+  verdict: "strong" | "weak";
+  verdict_reason: string;
+  what_supports_it: string[];
+  what_makes_it_hard: string[];
+  target_audience: string;
+  market_and_competition: string;
+  assumptions: { rank: number; assumption: string; why_it_matters: string; evidence_strength: "supported" | "inferred" | "unknown"; cheapest_test_this_week: string }[];
+  biggest_risk: string;
+  recommended_next_step: string;
+};
 export type Interpretation = {
   title: string; objective: string; domain: string; assumptions: string[];
   variables: { name: string; description: string; value: string | number | boolean | null; unit: string | null; rationale: string }[];
@@ -42,6 +53,7 @@ export type Interpretation = {
     method: string; assumptions: string[]; caveats: string[];
     sources: { title: string; url: string; publisher: string | null; published_at: string | null; supports: string }[];
   };
+  decision_brief: IdeaDecisionBrief;
   configuration_valid: boolean; configuration_errors: string[]; interpretation_notice: string;
 };
 export type RunInterpretation = {
