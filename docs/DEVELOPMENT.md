@@ -9,7 +9,7 @@ This guide covers local setup and the API surface. For the product overview, sim
 3. For GitHub, create an OAuth app and add Firebase's callback URL to the OAuth app configuration.
 4. Add `localhost` under **Authentication → Settings → Authorized domains** for local development.
 5. Copy `.env.example` to `.env`. Set the Firebase project ID, Web API key, auth domain, and app ID from the web app settings. Provide Firebase Admin credentials with Application Default Credentials or `FIREBASE_SERVICE_ACCOUNT_JSON`.
-6. Set `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` to enable AI drafting. This is optional.
+6. Set `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and `FIRECRAWL_API_KEY` to enable research-led AI drafting.
 
 Keep service-account credentials and provider keys out of source control. Firebase's web API key is a public client configuration value; restrict it to your app's domains in Google Cloud where appropriate.
 
@@ -49,8 +49,8 @@ The API base path is `/api/v1`. Main resource routes include:
 
 - `/organizations`, `/projects`, `/experiments` — workspace and experiment setup.
 - `/environments` — environments and source provenance.
-- `/data-sources/data360/search` and `/data-sources/data360/data` — authenticated proxy to the public World Bank Data360 catalog and observations API.
-- `/ai/interpret` — optional OpenRouter experiment draft.
+- `/ai/interpret` — Firecrawl search and scrape evidence is gathered server-side and passed to OpenRouter for the structured discovery draft. Returned citations are restricted to URLs Firecrawl supplied.
+- `/agent/decision` — optional x402-gated agent endpoint. Configure `SOLANA_PAY_TO` to enable it; it returns a cited decision brief after exact Solana payment.
 - `/ai/runs/{id}/interpret` — optional commentary grounded in a completed run's metrics and assumptions.
 - `/experiments/{id}/scenarios`, `/scenarios/{id}/runs` — scenario branching and simulation runs.
 - `/experiments/{id}/runs`, `/experiments/{id}/scenarios/compare` — run history and comparison.
@@ -61,3 +61,4 @@ The API base path is `/api/v1`. Main resource routes include:
 - Backend environment template: [`../.env.example`](../.env.example)
 - Web environment template: [`../web/.env.example`](../web/.env.example)
 - Deployment instructions: [`../deploy/README.md`](../deploy/README.md)
+- Hackathon architecture, demo path, and Solana/Supabase/Firecrawl setup: [`HACKATHON.md`](HACKATHON.md)

@@ -1,8 +1,8 @@
 # Sandbox
 
-**Turn business questions into explicit models, repeatable simulations, and reports you can inspect.**
+**One idea in. One decision out.**
 
-Sandbox is a workspace for exploring operational and financial scenarios. Describe what you want to understand, choose a model, review its assumptions, then run and compare outcomes. AI can help draft an experiment, but it does not run the model or decide the results.
+Sandbox researches an early-stage product idea, returns a clear strength or weakness assessment, ranks the three assumptions most likely to break it, and proposes a cheap test for each. Firecrawl gathers public evidence; the AI must show its sources and label what it cannot verify. Simplified simulations remain available as a separate way to explore bounded operational or financial questions.
 
 <p align="center">
   <a href="https://nextjs.org/"><img alt="Next.js" src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white"></a>
@@ -20,7 +20,10 @@ Sandbox is a workspace for exploring operational and financial scenarios. Descri
   <a href="https://redis.io/"><img alt="Redis" src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white"></a>
   <a href="https://simpy.readthedocs.io/"><img alt="SimPy" src="https://img.shields.io/badge/SimPy-4B5563?style=for-the-badge&logo=python&logoColor=white"></a>
   <a href="https://openrouter.ai/"><img alt="OpenRouter" src="https://img.shields.io/badge/OpenRouter-6B5CE7?style=for-the-badge&logo=openrouter&logoColor=white"></a>
-  <a href="https://data360.worldbank.org/en/api"><img alt="World_Bank_Data360" src="https://img.shields.io/badge/World_Bank_Data360-002244?style=for-the-badge&logo=worldbank&logoColor=white"></a>
+  <a href="https://www.firecrawl.dev/"><img alt="Firecrawl" src="https://img.shields.io/badge/Firecrawl-FF6B35?style=for-the-badge&logo=firecrawl&logoColor=white"></a>
+  <a href="https://supabase.com/"><img alt="Supabase" src="https://img.shields.io/badge/Supabase-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white"></a>
+  <a href="https://solana.com/"><img alt="Solana" src="https://img.shields.io/badge/Solana-9945FF?style=for-the-badge&logo=solana&logoColor=white"></a>
+  <a href="https://x402.org/"><img alt="x402" src="https://img.shields.io/badge/x402-111827?style=for-the-badge&logoColor=white"></a>
   <a href="https://www.reportlab.com/"><img alt="ReportLab" src="https://img.shields.io/badge/ReportLab-8B5CF6?style=for-the-badge&logo=python&logoColor=white"></a>
   <a href="https://pydantic.dev/"><img alt="Pydantic" src="https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white"></a>
   <a href="https://www.uvicorn.org/"><img alt="Uvicorn" src="https://img.shields.io/badge/Uvicorn-4051B5?style=for-the-badge&logo=python&logoColor=white"></a>
@@ -52,11 +55,11 @@ Sandbox is a workspace for exploring operational and financial scenarios. Descri
 
 Industry starter prompts cover areas such as retail, healthcare, logistics, manufacturing, finance, education, hospitality, public services, technology, and agriculture. They help users frame a scenario; they are not calibrated industry models.
 
-## Data and evidence
+## Research, storage, and Solana
 
-The World Bank Data360 connection lets users search indicators, preview country and time-period observations, and save selected records with source and attribution details in an environment. Data can then be carried into report provenance.
+Firecrawl searches and extracts public web pages during idea review. OpenRouter uses that retrieved evidence to draft an assessment, and the app keeps source links alongside the saved exploration. A citation is a path to evidence, not proof that a claim is true; research does not calibrate simulation inputs.
 
-Data360 is a **context and provenance rail** in this alpha. Its observations do not currently set simulation parameters or calibrate the engines. Check the terms for each indicator before reusing or redistributing it; licensing may vary by source.
+Hosted deployments use Supabase Postgres through the existing SQLAlchemy/Alembic layer. Firebase Authentication remains the sign-in provider in this branch. An optional x402 endpoint lets AI agents pay for a decision brief in Solana USDC; founders do not need a wallet. The current setup defaults to Devnet and is not a mainnet payment launch.
 
 ## Who Sandbox is for
 
@@ -80,12 +83,12 @@ The interface includes 2D charts and scenario comparisons. It does not currently
 
 ## Get started
 
-For the local development setup, Firebase configuration, Docker workflow, and API overview, see [Development guide](docs/DEVELOPMENT.md). For the Vercel frontend and Render API/worker deployment, see [Deployment guide](deploy/README.md).
+For the local development setup and API overview, see [Development guide](docs/DEVELOPMENT.md). The [hackathon build notes](docs/HACKATHON.md) document Firecrawl, Supabase, the x402 Solana endpoint, setup, demo steps, and current decentralization limits. For Vercel and Render deployment, see [Deployment guide](deploy/README.md).
 
 ### Sign-in providers
 
-Firebase Authentication supports email and password and Google sign-in. GitHub sign-in is currently disabled in the interface until its Firebase provider and GitHub OAuth app are configured. OpenRouter-powered drafting is optional; experiments can be configured and run without AI credentials.
+Firebase Authentication supports email and password and Google sign-in. GitHub sign-in is currently disabled in the interface until its Firebase provider and GitHub OAuth app are configured. Live idea research requires Firecrawl and OpenRouter credentials. The optional x402 agent endpoint is enabled only when a Solana receiving wallet is configured.
 
 ## Technology
 
-The badges above link to the project technologies and services: Next.js, React, TypeScript, Tailwind CSS, Lucide, Firebase Authentication and Admin, FastAPI, Python, Uvicorn, Pydantic, HTTPX, PostgreSQL, Psycopg, SQLAlchemy, Alembic, Celery, Redis, SimPy, Node.js, PostCSS, ESLint, OpenRouter, World Bank Data360, ReportLab, and Docker.
+The badges above link to the project technologies and services, including Next.js, React, TypeScript, Firebase, FastAPI, Python, Supabase Postgres, SQLAlchemy, Celery, Redis, SimPy, OpenRouter, Firecrawl, Solana, x402, ReportLab, and Docker.

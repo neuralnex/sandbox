@@ -31,10 +31,6 @@ export type Run = {
 };
 export type Environment = { id: string; name: string; environment_type: "real_world" | "digital_twin" | "synthetic"; configuration: Record<string, unknown>; provenance: Record<string, unknown>; version: number };
 export type Dataset = { id: string; environment_id: string; name: string; source_url: string | null; license: string | null; observed_at: string | null; metadata_json: Record<string, unknown> };
-export type Data360Indicator = { series_description?: { idno?: string; name?: string; database_id?: string }; [key: string]: unknown };
-export type Data360Observation = { OBS_VALUE?: string | null; TIME_PERIOD?: string; REF_AREA?: string; UNIT_MEASURE?: string | null; COMMENT_TS?: string | null; [key: string]: unknown };
-export type Data360SearchResponse = { "@odata.count"?: number; value?: Data360Indicator[] };
-export type Data360DataResponse = { count?: number; value?: Data360Observation[] };
 export type Interpretation = {
   title: string; objective: string; domain: string; assumptions: string[];
   variables: { name: string; description: string; value: string | number | boolean | null; unit: string | null; rationale: string }[];

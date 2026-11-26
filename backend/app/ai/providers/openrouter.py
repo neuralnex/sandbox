@@ -33,13 +33,11 @@ class OpenRouterProvider:
     async def generate(self, messages: list[dict[str, str]]) -> str:
         return await self._complete(messages)
 
-    async def generate_structured(self, messages: list[dict[str, str]], schema: dict, *, web_search: bool = False) -> dict:
-        tools = [{"type": "openrouter:web_search"}] if web_search else None
+    async def generate_structured(self, messages: list[dict[str, str]], schema: dict) -> dict:
         response = await self._complete(
             messages,
             response_format={"type": "json_schema", "json_schema": {"name": "sandbox_output", "strict": True, "schema": schema}},
             provider={"require_parameters": True},
-            **({"tools": tools} if tools else {}),
         )
         try:
             parsed: Any = json.loads(response)
@@ -66,10 +64,6 @@ class OpenRouterProvider:
                 )
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 400 and options.get("tools"):
-                raise OpenRouterError(
-                    "The configured OpenRouter model rejected web search or structured output. Choose a model that supports server tools and JSON-schema responses."
-                ) from exc
             raise OpenRouterError(
                 f"OpenRouter returned HTTP {exc.response.status_code}"
             ) from exc

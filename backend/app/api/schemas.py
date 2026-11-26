@@ -265,6 +265,7 @@ class ReportRead(BaseModel):
 
 class IdeaInterpretInput(BaseModel):
     idea: str = Field(min_length=20, max_length=32000)
+    geography: str | None = Field(default=None, max_length=160)
 
 
 class VariableSuggestion(BaseModel):

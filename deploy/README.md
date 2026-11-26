@@ -52,9 +52,15 @@ Set these variables on the single Render web service:
 | `FIREBASE_SERVICE_ACCOUNT_JSON` (API) | Firebase Admin service-account JSON stored as a secret. Do not put this in Vercel or commit it. Alternatively configure ADC in the container. |
 | `OPENROUTER_API_KEY` (API, optional) | Secret for AI draft and commentary features. |
 | `OPENROUTER_MODEL` (API, optional) | Model identifier; set with the key to enable OpenRouter features. |
+| `FIRECRAWL_API_KEY` (API) | Server-side key for live search and page extraction during founder research. |
+| `SOLANA_PAY_TO` (API, optional) | Base58 Solana recipient wallet. Enables the optional x402 agent endpoint. Leave empty to disable paid API access. |
+| `SOLANA_NETWORK` (API, optional) | Defaults to Solana Devnet (`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`). Use a production CAIP-2 network only with a production facilitator and tested token configuration. |
+| `SOLANA_RPC_URL` (API, optional) | RPC URL used to enrich x402 payment requirements. Use a suitable managed RPC in production. |
+| `X402_FACILITATOR_URL` (API, optional) | Defaults to the public x402 facilitator for devnet demonstrations. Configure a production facilitator before accepting real payments. |
+| `X402_RESEARCH_PRICE` (API, optional) | Price for one agent decision brief; defaults to `$0.05`. |
 | `CELERY_CONCURRENCY` (optional) | Worker concurrency; defaults to `1` so the API and worker share resources conservatively. |
 
-`DATABASE_URL` and `REDIS_URL` should point to managed, persistent services reachable from Render. They can be Render resources or your existing providers. The local Compose URLs that use `localhost` are not suitable for deployed services. Avoid placing credentials in Docker build arguments or image layers.
+`DATABASE_URL` and `REDIS_URL` should point to managed, persistent services reachable from Render. `DATABASE_URL` can use your Supabase Postgres connection string; use the Supavisor session pooler if Render cannot reach the direct database host. The app continues to use SQLAlchemy/Alembic against standard Postgres. The local Compose URLs that use `localhost` are not suitable for deployed services. Avoid placing credentials in Docker build arguments or image layers.
 
 ## 4. Deploy the frontend to Vercel
 
@@ -90,4 +96,4 @@ For local development, continue using the Compose setup described in [Developmen
 
 ## Product limits
 
-The queueing, inventory, and Monte Carlo engines still use simplified assumptions. The Data360 connector saves source records and observations for context; it does not calibrate simulation inputs. See the product [README](../README.md) for the model and data limits.
+The queueing, inventory, and Monte Carlo engines still use simplified assumptions. Firecrawl searches and extracts public web evidence for the founder brief; source evidence does not calibrate simulation inputs. x402 is optional and agent-facing; founders can use the product without a wallet. See [Hackathon architecture](../docs/HACKATHON.md) and the product [README](../README.md) for scope and limitations.
